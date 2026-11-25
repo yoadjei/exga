@@ -208,6 +208,16 @@ def test_the_study_table_formats_each_measure_in_its_unit() -> None:
     assert table.rows[0]["iqr"] == "[0.0, 20.0]"
 
 
+def test_the_spread_of_a_rate_is_in_percentage_points() -> None:
+    rows = [
+        summary_row("all", "manual_minutes", "20") | {"sd": "2.5"},
+        summary_row("all", "tool_accuracy", "0.9") | {"sd": "0.013"},
+        summary_row("all", "accuracy_difference", "0.05") | {"sd": "0.02"},
+    ]
+
+    assert [row["sd"] for row in study_table(rows).rows] == ["2.5", "1.3 pp", "2.0 pp"]
+
+
 def test_the_trust_table_quotes_each_statement() -> None:
     answers = {"answer_1": "0", "answer_2": "1", "answer_3": "1", "answer_4": "3", "answer_5": "1"}
     rows = [Row(item=f"trust_{n}", n="6", median="4", **answers) for n in range(1, 5)]

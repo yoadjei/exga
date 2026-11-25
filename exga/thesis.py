@@ -395,10 +395,10 @@ def _study_row(row: Row) -> Row:
 
 
 def _spread(value: object, unit: str) -> str:
-    """a standard deviation, unsigned, in the measure's unit."""
+    """a standard deviation, unsigned: plain for minutes and scores, percentage points for rates."""
     if unit == "minutes":
         return _number(value)
-    return f"{float(str(value)) * PERCENT:.1f} pp" if unit == "points" else percent(value)
+    return f"{float(str(value)) * PERCENT:.1f} pp"
 
 
 def _first_only(rows: list[Row], key: str) -> list[Row]:
