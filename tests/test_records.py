@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from exga.errors import ConfigError
-from exga.records import load_records, save_records
-from exga.schemas import CalibrationRecord
+from exga.records import load_jsonl, load_records, save_jsonl, save_records
+from exga.schemas import CalibrationRecord, FieldSamples, SampleAnswer
 
 NOW = datetime(2026, 11, 25, tzinfo=UTC)
 
@@ -54,5 +54,24 @@ def test_a_malformed_line_is_named(tmp_path: Path, line: str, message: str) -> N
 
 
 def test_a_missing_file_is_a_config_error(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="cannot read records file"):
+    with pytest.raises(ConfigError, match="cannot read"):
         load_records(tmp_path / "absent.jsonl")
+
+
+def test_any_record_type_round_trips_and_errors_name_the_type(tmp_path: Path) -> None:
+    samples = [
+        FieldSamples(
+            paper_id="a" * 64,
+            field="sample_size",
+            greedy=SampleAnswer(value="120", evidence=None),
+            samples=(),
+            failed_samples=0,
+            model_id="mock",
+            prompt_version="extract_v1",
+        )
+    ]
+    save_jsonl(samples, tmp_path / "samples.jsonl")
+
+    assert load_jsonl(tmp_path / "samples.jsonl", FieldSamples) == samples
+    with pytest.raises(ConfigError, match="line 1: not a valid CalibrationRecord"):
+        load_jsonl(tmp_path / "samples.jsonl", CalibrationRecord)

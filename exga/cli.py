@@ -23,6 +23,7 @@ from exga.llm.cache import CachedLLMClient
 from exga.llm.hosted import HostedLLMClient
 from exga.messages import percent
 from exga.papers import load_folder
+from exga.records import save_jsonl
 from exga.settings import Settings, load_settings
 from exga.splits import double_annotation_sample
 
@@ -81,8 +82,7 @@ def extract(
             typer.echo(f"stopped: {exc}. Rerun to continue; answers so far are cached.", err=True)
             raise typer.Exit(EXIT_BUDGET) from exc
     out.mkdir(parents=True, exist_ok=True)
-    with (out / "samples.jsonl").open("w", encoding="utf-8", newline="\n") as handle:
-        handle.writelines(item.model_dump_json() + "\n" for item in items)
+    save_jsonl(items, out / "samples.jsonl")
     failure_rate = parse_failure_rate(items)
     summary = {
         "started_at": started.isoformat(),
