@@ -8,8 +8,10 @@ license-files = ["LICENSE"]
 authors = [{ name = "Yaw Osei Adjei" }]
 requires-python = ">=3.11"
 dependencies = [
+    "numpy>=2.4.6",
     "pydantic>=2.14.4",
     "pydantic-settings>=2.16.3",
+    "scipy>=1.17.1",
 ]
 
 [build-system]
@@ -18,10 +20,12 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.170.17",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
+    "scipy-stubs>=1.17.1.5",
 ]
 
 [tool.ruff]

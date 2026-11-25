@@ -59,11 +59,10 @@ correction is needed.
 ## Revisit if
 
 - The P1 guarantee simulation (spec 9.2) shows a violation rate above δ + 0.02.
-- **Open point, to settle in P1.** Skipping λ with n_λ < m_min makes the starting point of the
-  sequence depend on the scores, which the argument above does not cover directly. A short
-  argument suggests validity still holds when P(wrong | s) is non-increasing in s; without
-  that condition, a small inflation is possible in principle. P1 will add non-monotone error
-  curves to the simulation and write the argument up in `docs/method.md`. Any change to the
-  procedure goes to the owner first.
+- **Open point, resolved by ADR 0004.** Skipping sparse thresholds makes the starting point of
+  the sequence depend on the scores. `docs/method.md` proves validity when P(wrong | s) does not
+  increase with s. The simulation, which includes two non-monotone populations, found no
+  violation rate above 0.086. ADR 0004 also replaces the spec's skip rule, which left the
+  procedure unable to certify at α ≤ 0.2.
 - Most fields come out NOT_CERTIFIABLE at the owner's α for lack of data: compare conformal
   selection (spec 5.5).

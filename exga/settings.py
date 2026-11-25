@@ -29,7 +29,8 @@ class CalibrationSettings(BaseModel):
     """allowed probability that the certified bound fails; the stated confidence is 1 - delta."""
 
     min_accepted: int = Field(default=10, ge=1)
-    """m_min: grid thresholds accepting fewer calibration items than this are skipped."""
+    """m_min: lower bound on the starting floor. thresholds accepting fewer items than
+    max(min_accepted, required_n(alpha, delta, 0)) are skipped (ADR 0004)."""
 
     grid_step: float = Field(default=0.005, gt=0.0, le=1.0)
     """spacing of the fixed threshold grid over [0, 1]; must divide 1 exactly."""
