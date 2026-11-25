@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use exga, please cite it as below."
+title: "exga: risk-controlled data extraction from research-paper PDFs"
+abstract: >-
+  exga extracts user-defined fields from research-paper PDFs with a large language model,
+  scores each value's confidence, and accepts a value only when its score clears a
+  threshold certified on human-checked data, so that the error rate among accepted values
+  of a field is at most a chosen alpha with probability at least 1 - delta. Other values
+  are flagged for a person to check. A local web app covers the workflow from upload to
+  export, and random audits keep the certification up to date.
+type: software
+authors:
+  - given-names: Yaw Osei
+    family-names: Adjei
+version: 0.1.0
+date-released: 2026-11-25
+license: MIT
+repository-code: "https://github.com/yoadjei/exga"
+keywords:
+  - data extraction
+  - systematic reviews
+  - large language models
+  - risk control
+  - selective prediction
+  - calibration
