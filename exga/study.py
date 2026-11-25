@@ -37,7 +37,14 @@ SUS_ITEMS = 10
 SUS_SCALE = range(1, 6)
 SUS_MULTIPLIER = 2.5
 """a raw SUS total of 0-40 becomes 0-100 (Brooke, 1996)."""
-TRUST_ITEMS = 4
+TRUST_STATEMENTS = (
+    "I trusted the values marked Accepted without checking them myself.",
+    "The highlighted evidence helped me decide whether a value was right.",
+    "I understood why some values were marked Check.",
+    "I would rely on values marked Accepted in a real review.",
+)
+"""the trust statements of study/questionnaire.md, in order; written for this study."""
+TRUST_ITEMS = len(TRUST_STATEMENTS)
 CONDITIONS: tuple[Condition, ...] = ("manual", "tool")
 ROLES = ("student", "researcher", "other")
 EXPERIENCE = ("none", "some", "much")

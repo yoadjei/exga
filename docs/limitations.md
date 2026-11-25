@@ -43,7 +43,9 @@ how exga handles it. Findings from building exga are also listed in
   that holds over the whole log at once would need an anytime-valid method, such as a
   confidence sequence. That is out of scope (ADR 0009).
 - **Records must not depend on labels.** If wrong values are logged half as often as right
-  ones, the share of violated versions rises to 0.21–0.46 in the same simulation. Only items
+  ones, the share of violated versions rises to 0.21–0.46 for the three populations whose
+  errors fall as scores rise, from at most 0.034 under random audits (the two others: 0.055
+  and 0.000; `results/audit_simulation.csv`). Only items
   drawn by exga's random audit enter calibration from the Review and Audit pages (ADR 0009).
   The database cannot detect a person who labels carelessly.
 - **Imported records are trusted.** A `gold.csv` or an experiment's records file enters
