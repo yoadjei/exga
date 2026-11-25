@@ -7,7 +7,10 @@ license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Yaw Osei Adjei" }]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pydantic>=2.14.4",
+    "pydantic-settings>=2.16.3",
+]
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -57,6 +60,13 @@ python_version = "3.11"
 strict = true
 warn_unreachable = true
 files = ["exga", "tests"]
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+# type-check model constructor calls against the declared fields
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
 
 [tool.pytest.ini_options]
 minversion = "8.0"
