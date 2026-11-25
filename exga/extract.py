@@ -255,6 +255,18 @@ def extract_all(
         )
 
 
+def parse_failure_rate(items: Sequence[FieldSamples]) -> float | None:
+    """share of answers, greedy and sampled, that stayed unusable after repair (P3 check).
+
+    items without any answers (`error` set) are left out: their requests failed, which is
+    not a parsing problem. None when no item has answers.
+    """
+    answered = [item for item in items if item.error is None]
+    answers = sum(1 + len(item.samples) + item.failed_samples for item in answered)
+    failed = sum((item.greedy is None) + item.failed_samples for item in answered)
+    return failed / answers if answers else None
+
+
 def _ask(
     client: LLMClient,
     prompts: Prompts,

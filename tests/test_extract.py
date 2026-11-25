@@ -4,9 +4,15 @@ import pytest
 
 from exga.document import text_document
 from exga.errors import BudgetExceededError, LLMResponseError
-from exga.extract import answer_schema, extract_all, extract_item, load_prompts
+from exga.extract import (
+    answer_schema,
+    extract_all,
+    extract_item,
+    load_prompts,
+    parse_failure_rate,
+)
 from exga.llm.mock import MockCall, MockLLMClient
-from exga.schemas import FieldSpec, RawResponse, SampleAnswer
+from exga.schemas import FieldSamples, FieldSpec, RawResponse, SampleAnswer
 from exga.settings import ExtractionSettings, Settings
 
 PROMPTS = load_prompts("extract_v1")
@@ -144,3 +150,32 @@ def test_extract_all_returns_items_in_paper_then_field_order() -> None:
         (other.paper_id, "sample_size"),
         (other.paper_id, "country"),
     ]
+
+
+def samples_record(
+    greedy_ok: bool, parsed: int, failed: int, error: str | None = None
+) -> FieldSamples:
+    answer = SampleAnswer(value="1", evidence=None)
+    return FieldSamples(
+        paper_id=PAPER.paper_id,
+        field="sample_size",
+        greedy=answer if greedy_ok else None,
+        samples=(answer,) * parsed,
+        failed_samples=failed,
+        error=error,
+        model_id="mock",
+        prompt_version="extract_v1",
+    )
+
+
+def test_parse_failures_count_greedy_and_sampled_answers() -> None:
+    items = [samples_record(True, 5, 0), samples_record(False, 3, 2)]
+
+    assert parse_failure_rate(items) == pytest.approx(3 / 12)
+
+
+def test_items_whose_requests_failed_are_not_parse_failures() -> None:
+    items = [samples_record(True, 5, 0), samples_record(False, 0, 5, error="HTTP 400")]
+
+    assert parse_failure_rate(items) == 0.0
+    assert parse_failure_rate([samples_record(False, 0, 5, error="HTTP 400")]) is None
