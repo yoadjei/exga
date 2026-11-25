@@ -72,3 +72,10 @@ dependencies.
 
 **Decided:** `pymupdf>=1.28.2,<2`. Revisit when a security fix ships only in 2.x, or when
 1.x stops building for a supported Python version.
+
+## Amendment 2026-11-25: pandas is declared
+
+The Review page imports pandas directly to style its table, but pandas was only installed as
+a dependency of streamlit. A direct import must not rely on another package's dependencies,
+which can change without notice. **Decided:** `pandas>=3.1` in the runtime dependencies. The
+install size does not change.

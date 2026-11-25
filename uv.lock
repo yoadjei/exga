@@ -631,6 +631,7 @@ dependencies = [
     { name = "httpx" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pandas" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
@@ -660,6 +661,7 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28" },
     { name = "numpy", specifier = ">=2.4.6" },
+    { name = "pandas", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.14.4" },
     { name = "pydantic-settings", specifier = ">=2.16.3" },
     { name = "pymupdf", specifier = ">=1.28.2,<2" },
