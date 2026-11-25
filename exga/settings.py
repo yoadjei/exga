@@ -81,6 +81,18 @@ class DocumentSettings(BaseModel):
     """page rendering scale for highlights: 1.5 gives 108 dpi, legible without large images."""
 
 
+class AuditSettings(BaseModel):
+    """random audits, the only source of new calibration records (spec 5.6, ADR 0009)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", use_attribute_docstrings=True)
+
+    rate: float = Field(default=0.05, gt=0.0, le=1.0)
+    """share of all extracted items drawn for checking in each review session."""
+
+    min_items: int = Field(default=3, ge=1)
+    """smallest audit batch, so small projects still collect records."""
+
+
 class SplitSettings(BaseModel):
     """shares of papers in each split (spec 10.3); the test split gets the rest."""
 
@@ -244,6 +256,9 @@ class Settings(BaseSettings):
 
     splits: SplitSettings = Field(default_factory=SplitSettings)
     """data splits for experiments."""
+
+    audit: AuditSettings = Field(default_factory=AuditSettings)
+    """random audits."""
 
     hosted: HostedSettings = Field(default_factory=HostedSettings)
     """the chat-completions model back-end."""
