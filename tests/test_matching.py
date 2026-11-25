@@ -3,8 +3,10 @@ import pytest
 from exga.errors import ConfigError
 from exga.matching import (
     allowed_value,
+    contains_value,
     is_correct,
     normalise_text,
+    numbers_in,
     parse_number,
     token_f1,
     values_match,
@@ -224,3 +226,52 @@ def test_allowed_value_names_the_option_a_text_refers_to(text: str, expected: st
 
 def test_allowed_value_is_none_for_fields_without_options() -> None:
     assert allowed_value("usa", COUNTRY) is None
+
+
+def test_numbers_in_finds_every_number_then_one_in_words() -> None:
+    assert numbers_in("120 of 1,500 (8.0%) were aged -3.5; two hundred refused") == [
+        120.0,
+        1500.0,
+        8.0,
+        -3.5,
+        200.0,
+    ]
+    assert numbers_in("no numbers here") == []
+
+
+TOLERANT = FieldSpec(name="age", description="mean age", group="numeric", numeric_tolerance=0.1)
+
+
+@pytest.mark.parametrize(
+    ("text", "value", "spec", "expected"),
+    [
+        ("A total of 120 participants were randomised", "120", SAMPLE_SIZE, True),
+        ("A total of 1,200 participants", "1200", SAMPLE_SIZE, True),
+        ("A total of 129 participants were randomised", "120", SAMPLE_SIZE, False),
+        ("mean age 54.2 years", "54.25", TOLERANT, True),
+        ("one hundred and twenty patients", "120", SAMPLE_SIZE, True),
+        ("This randomized controlled trial enrolled adults", "rct", DESIGN, True),
+        ("This RCT enrolled adults", "rct", DESIGN, True),
+        ("This cohort study enrolled adults", "rct", DESIGN, False),
+        ("Data were collected in the USA.", "united states", COUNTRY, True),
+        ("Data were collected in Ghana.", "Ghana", COUNTRY, True),
+        ("Data were collected in Ghanaian clinics.", "Ghana", COUNTRY, False),
+        (
+            "Anxiety did not differ between groups.",
+            "the intervention reduced depression",
+            RESULT,
+            False,
+        ),
+        (
+            "The intervention reduced depression scores.",
+            "intervention reduced depression",
+            RESULT,
+            True,
+        ),
+        ("Anything at all.", "", COUNTRY, False),
+    ],
+)
+def test_contains_value_applies_the_field_rule(
+    text: str, value: str, spec: FieldSpec, expected: bool
+) -> None:
+    assert contains_value(text, value, spec, RULES) is expected

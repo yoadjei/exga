@@ -83,6 +83,39 @@ def parse_number(text: str) -> float | None:
     match = _NUMBER.search(text)
     if match is None:
         return _parse_number_words(text)
+    return _number_value(match)
+
+
+def numbers_in(text: str) -> list[float]:
+    """return every number in text: each one in digits, in order, then the first in words."""
+    numbers = [_number_value(match) for match in _NUMBER.finditer(text)]
+    in_words = _parse_number_words(text)
+    return numbers if in_words is None else [*numbers, in_words]
+
+
+def contains_value(text: str, value: str, spec: FieldSpec, rules: MatchingSettings) -> bool:
+    """return whether text, typically a quote from the paper, states value (spec 7.4).
+
+    numeric: some number in text matches value within the field's tolerance. categorical:
+    text contains the value or one of its synonyms as a phrase. short_text: text contains
+    the value as a phrase. long_text: at least rules.long_text_min_f1 of the value's words
+    occur in text, since a long answer paraphrases its source.
+    """
+    if spec.group == "numeric":
+        return any(values_match(repr(number), value, spec, rules) for number in numbers_in(text))
+    haystack = f" {normalise_text(text)} "
+    if spec.group == "long_text":
+        value_words = normalise_text(value).split()
+        present = sum(f" {word} " in haystack for word in value_words)
+        return bool(value_words) and present / len(value_words) >= rules.long_text_min_f1
+    variants = [value, *(spec.synonyms or {}).get(value, ())]
+    return any(
+        normalise_text(variant) and f" {normalise_text(variant)} " in haystack
+        for variant in variants
+    )
+
+
+def _number_value(match: re.Match[str]) -> float:
     value = Decimal(match["digits"].replace(",", ""))
     if match["exponent"]:
         value = value.scaleb(int(match["exponent"]))
