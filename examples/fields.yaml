@@ -1,0 +1,35 @@
+# An example field list for exga (spec 10.2). Each description pins the question to exactly
+# one correct answer per paper (spec 6.3): say which number, which country, which outcome.
+fields:
+  - name: sample_size
+    description: >-
+      total number of participants randomised or enrolled in the study as a whole, across all
+      groups; not the number screened, analysed or completing follow-up
+    group: numeric
+    unit: participants
+  - name: year
+    description: >-
+      year in which the paper was published, as printed on the paper or its journal header
+    group: numeric
+  - name: study_design
+    description: design of the study as a whole, as the authors describe it
+    group: categorical
+    allowed_values: [rct, cohort, case_control, cross_sectional, qualitative, other]
+    synonyms:
+      rct: [randomised controlled trial, randomized controlled trial, randomised trial]
+      cross_sectional: [survey, cross-sectional survey]
+  - name: country
+    description: >-
+      country where the data were collected; if data come from more than one country,
+      return "multiple"
+    group: short_text
+  - name: main_outcome_measure
+    description: >-
+      the primary outcome measure named by the authors, e.g. a scale or test; if none is
+      named as primary, the first outcome reported in the results
+    group: short_text
+  - name: primary_result
+    description: >-
+      the main finding for the primary outcome, in one or two sentences, including the
+      direction of the effect
+    group: long_text
