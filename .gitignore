@@ -35,3 +35,8 @@ tasks/
 # downloaded benchmark data (scripts/download_benchmark.py) and the model response cache
 data/benchmark/raw/
 .exga/
+
+# user-study forms, answers, papers and results stay on the researcher's machine (ADR 0012)
+study/data/
+study/papers/
+results/study/

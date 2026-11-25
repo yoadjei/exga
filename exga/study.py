@@ -32,6 +32,7 @@ ORDERS: tuple[tuple[Condition, PaperSet], ...] = (
     ("tool", "B"),
 )
 """the four (first condition, its paper set) pairs; the second session is the other of each."""
+PAPER_SETS: tuple[PaperSet, ...] = ("A", "B")
 SUS_ITEMS = 10
 SUS_SCALE = range(1, 6)
 SUS_MULTIPLIER = 2.5

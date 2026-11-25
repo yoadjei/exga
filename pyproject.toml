@@ -77,7 +77,7 @@ select = [
 python_version = "3.11"
 strict = true
 warn_unreachable = true
-files = ["exga", "tests", "scripts", "experiments"]
+files = ["exga", "tests", "scripts", "experiments", "study"]
 plugins = ["pydantic.mypy"]
 # PyMuPDF's own annotations are incomplete; only calls into it are exempt from the
 # untyped-call check, so our code around it stays fully typed

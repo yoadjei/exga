@@ -11,10 +11,15 @@ from pathlib import Path
 Row = dict[str, object]
 
 
-def write_rows(rows: Sequence[Row], path: Path) -> Path:
-    """write rows as a CSV file with the first row's columns; no rows give an empty file."""
+def write_rows(rows: Sequence[Row], path: Path, *, spreadsheet: bool = False) -> Path:
+    """write rows as a CSV file with the first row's columns; no rows give an empty file.
+
+    spreadsheet adds a byte-order mark, so spreadsheet programs read non-ASCII text right; use
+    it for forms people fill in.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
+    encoding = "utf-8-sig" if spreadsheet else "utf-8"
+    with path.open("w", encoding=encoding, newline="") as handle:
         if rows:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
             writer.writeheader()
