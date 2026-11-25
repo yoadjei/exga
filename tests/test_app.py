@@ -88,7 +88,7 @@ def extracted(project: Project) -> Project:
     return project
 
 
-@pytest.mark.parametrize("screen", ["fields", "run", "calibrate", "review"])
+@pytest.mark.parametrize("screen", ["fields", "run", "calibrate", "review", "audit", "export"])
 def test_without_a_project_every_page_says_where_to_open_one(screen: str) -> None:
     test = page(app(), screen)
 
@@ -210,6 +210,45 @@ def test_a_selected_value_shows_its_page_and_takes_a_correction(extracted: Proje
     }
     assert extracted.store.records() == []  # a correction never becomes a calibration record
     assert list(test.dataframe[0].value["Checked value"]) == ["121"]
+
+
+def test_an_audit_is_answered_and_recalibrates(extracted: Project) -> None:
+    test = page(app(extracted), "audit")
+    test = button(test, "Draw 1 values to check")()
+    assert "Item 1 of 1" in [header.value for header in test.subheader]
+
+    test = button(test, "✓ The model's value is right")()
+    test = button(test, "Finish the audit and recalibrate")()
+
+    [record] = extracted.store.records()
+    assert (record.source, record.wrong) == ("random_audit", False)
+    assert "Audit finished: 1 checked values added." in texts(test)
+    assert "Every extracted value has been audited." in texts(test)
+
+
+def test_an_audit_answer_can_be_given_again(extracted: Project) -> None:
+    test = button(page(app(extracted), "audit"), "Draw 1 values to check")()
+    test = button(test, "I cannot check this item")()
+    test = button(test, "Answer again")()
+    test.text_input[0].set_value("121")
+    test = button(test, "Save the right value")()
+
+    [item] = extracted.store.audit_items(1)
+    assert (item.status, item.checked_value) == ("checked", "121")
+
+
+def test_export_offers_the_results_and_guarantees(extracted: Project) -> None:
+    test = page(app(extracted), "export")
+
+    labels = [widget.label for widget in test.download_button]
+    assert labels == ["Download results.csv"]
+    assert test.dataframe[0].value["checked_value"].tolist() == [""]
+
+
+def test_review_and_audit_say_what_to_do_before_any_extraction(project: Project) -> None:
+    for screen in ("review", "audit", "export"):
+        test = page(app(project), screen)
+        assert "Nothing is extracted yet" in test.info[0].value
 
 
 def test_the_env_file_comes_from_the_arguments_after_streamlit_run() -> None:

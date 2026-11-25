@@ -18,7 +18,7 @@ def _page(screen: str) -> st.Page:
 
 pages = {
     "Set up": [_page("project"), _page("fields"), _page("run")],
-    "Certify": [_page("calibrate"), _page("review")],
+    "Certify": [_page("calibrate"), _page("review"), _page("audit"), _page("export")],
 }
 
 with st.sidebar:
