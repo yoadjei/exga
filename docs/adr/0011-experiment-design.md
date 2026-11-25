@@ -27,7 +27,10 @@ any model run.
    of right values that were accepted). Each is computed per field and pooled per group.
 3. **Intervals.** 95% percentile bootstrap over test **papers**, 1,000 resamples, seeded:
    items from one paper share a text and a model reading, so they are not independent, and
-   resampling items would make intervals too narrow.
+   resampling items would make intervals too narrow. An interval belongs to one split, so
+   tables give the point estimate and interval of the primary split (seed 0), and, across
+   all 50 splits, the mean, the share of splits in which the unit certified, and the rate
+   in decision 4.
 4. **Violations, and their caveat.** For each split and certified unit, a violation is a
    realised test error above α. A test set of about 26 papers has about 26 items per field,
    so sampling noise alone pushes realised error above α often, even when the true error is
