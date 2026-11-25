@@ -122,7 +122,7 @@ def validity(rows: Sequence[Row], folder: Path, formats: Sequence[str] = ("png",
             )
     axes.axvline(delta, color=MUTED, linestyle="--", linewidth=1.2)
     axes.annotate(
-        f"{DELTA} = {delta:.0%}",
+        f"{DELTA} = {delta:g}",
         (delta, len(populations) - 0.5),
         xytext=(4, 0),
         textcoords="offset points",
@@ -144,7 +144,7 @@ def validity(rows: Sequence[Row], folder: Path, formats: Sequence[str] = ("png",
     axes.xaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
     axes.set_xlim(0, max(delta * 1.25, axes.get_xlim()[1]))
     handles = [
-        Line2D([], [], marker="o", linestyle="none", color=colour, label=f"{ALPHA} = {alpha:.0%}")
+        Line2D([], [], marker="o", linestyle="none", color=colour, label=f"{ALPHA} = {alpha:.2f}")
         for alpha, colour in zip(alphas, ALPHA_COLOURS, strict=False)
     ] + [
         Line2D([], [], marker=marker, linestyle="none", color=MUTED, label=f"{size:,} items")
@@ -237,7 +237,7 @@ def _updating(rows: Sequence[Row], model: str) -> Figure:
             key=lambda r: _number(r["audit_records"]),
         )
         xs = [_number(row["audit_records"]) for row in mine]
-        label = f"{ALPHA} = {alpha:.0%}"
+        label = f"{ALPHA} = {alpha:.2f}"
         for axes, column in panels:
             ys = [_number(row[column]) for row in mine]
             _series(axes, xs, ys, colour, label)

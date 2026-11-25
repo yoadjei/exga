@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from exga.evaluate import LabelledItem
@@ -41,9 +42,10 @@ def run_export(*args: object) -> subprocess.CompletedProcess[str]:
     )
 
 
-def write_config(tmp_path: Path) -> tuple[Path, ExperimentConfig]:
+def write_config(tmp_path: Path, benchmark: Path) -> tuple[Path, ExperimentConfig]:
     content = {
         "name": "e2e",
+        "data": {"kind": "benchmark", "folder": str(benchmark)},
         "models": [{"name": "mock"}],
         "alphas": [0.1, 0.2],
         "repetitions": 2,
@@ -95,8 +97,11 @@ def write_study(folder: Path) -> None:
     write_rows(trust_rows(results), folder / "trust.csv")
 
 
-def test_the_export_writes_every_table_and_figure_whose_results_exist(tmp_path: Path) -> None:
-    config_path, config = write_config(tmp_path)
+def test_the_export_writes_every_table_and_figure_whose_results_exist(
+    tmp_path: Path, write_benchmark: Callable[[Path, int], None]
+) -> None:
+    write_benchmark(tmp_path / "benchmark", 30)
+    config_path, config = write_config(tmp_path, tmp_path / "benchmark")
     write_tables(evaluate(config, {"mock": labelled_items(60)}), config.results_folder() / "tables")
     write_study(tmp_path / "study")
     out = tmp_path / "thesis"
@@ -111,8 +116,9 @@ def test_the_export_writes_every_table_and_figure_whose_results_exist(tmp_path: 
         "audit_simulation",
         "calibration_sizes",
         "e2e_baselines",
+        "e2e_data",
         "e2e_fields_mock",
-        "e2e_results",
+        "e2e_results_mock",
         "guarantee_simulation",
         "trust",
         "user_study",
@@ -121,7 +127,7 @@ def test_the_export_writes_every_table_and_figure_whose_results_exist(tmp_path: 
         f"{name}.{extension}" for name in names for extension in ("csv", "tex")
     )
     assert (
-        (out / "tables" / "e2e_results.tex")
+        (out / "tables" / "e2e_results_mock.tex")
         .read_text(encoding="utf-8")
         .startswith(r"\begin{table}")
     )
@@ -134,10 +140,12 @@ def test_the_export_writes_every_table_and_figure_whose_results_exist(tmp_path: 
         "e2e/updating_mock.pdf",
     }
     assert "skipped" not in result.stdout
+    data = (out / "tables" / "e2e_data.csv").read_text(encoding="utf-8").splitlines()
+    assert data[-1] == "all fields,,120,0"  # 30 papers, 4 fields each, all reported
 
 
 def test_missing_results_are_named_and_never_filled_in(tmp_path: Path) -> None:
-    config_path, _ = write_config(tmp_path)
+    config_path, _ = write_config(tmp_path, tmp_path / "no-benchmark")
     out = tmp_path / "thesis"
 
     result = run_export(
@@ -151,7 +159,8 @@ def test_missing_results_are_named_and_never_filled_in(tmp_path: Path) -> None:
         "calibration_sizes.tex",
     ]
     skipped = [line for line in result.stdout.splitlines() if line.startswith("skipped")]
-    assert len(skipped) == 4
+    assert len(skipped) == 5
+    assert any("download_benchmark.py" in line for line in skipped)
     assert any("make verify-guarantee" in line for line in skipped)
     assert any("make experiments" in line for line in skipped)
     assert any("study.py analyse" in line for line in skipped)

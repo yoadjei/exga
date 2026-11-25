@@ -2,14 +2,15 @@
 
     python experiments/thesis.py        (or: make thesis)
 
-writes results/thesis/tables/<name>.tex and .csv (booktabs LaTeX, and the same cells as CSV)
-and results/thesis/figures/<name>.pdf and .png, from:
+writes results/thesis/tables/<name>.tex and .csv (LaTeX that needs \\usepackage{booktabs,array},
+and the same cells as CSV) and results/thesis/figures/<name>.pdf and .png, from:
 
 - results/guarantee_simulation.csv and results/audit_simulation.csv (make verify-guarantee);
 - each experiment config's results folder (make experiments); a config with several score
-  variants gives the ablation table, any other the results, baselines and field tables and
-  the experiment figures;
-- results/study/ (python study/study.py analyse).
+  variants gives the ablation table, any other the baselines table, a results and a field
+  table per model, and the experiment figures;
+- results/study/ (python study/study.py analyse);
+- each config's dataset, for a table of its items per field (once per dataset).
 
 a missing source is skipped and named; nothing is filled in. the calibration-size table is
 computed and always written.
@@ -24,13 +25,18 @@ import typer
 
 from exga import thesis
 from exga.errors import ConfigError
-from exga.experiment import ExperimentConfig, load_config, read_tables
+from exga.experiment import Data, ExperimentConfig, load_config, load_items, read_tables
+from exga.settings import Settings, load_settings
 from exga.tables import read_rows, write_rows
 
 CONFIGS = [Path("experiments/main.yaml"), Path("experiments/ablations.yaml"),
            Path("experiments/annotated.yaml")]  # fmt: skip
 FORMATS = ("pdf", "png")
 DATASETS = {"benchmark": "the benchmark", "annotated": "the annotated set"}
+EXCLUSIONS = {
+    "benchmark": "Comparisons whose data are only in figures or image tables are left out "
+    "(ADR 0008); each paper gives one comparison per field, drawn at random."
+}
 EXIT_CONFIG = 2
 app = typer.Typer(add_completion=False)
 
@@ -49,18 +55,27 @@ def export(
     out: Annotated[Path, typer.Option(help="Folder for the thesis tables and figures.")] = Path(
         "results/thesis"
     ),
+    env_file: Annotated[
+        Path | None, typer.Option(help="Settings file (.env format), as given to run.py.")
+    ] = None,
 ) -> None:
     """Write the thesis tables and figures from every result that exists."""
     written: list[Path] = []
     skipped: list[str] = []
+    datasets: set[Data] = set()
+    try:
+        settings = load_settings(env_file)
+        configs = [load_config(path) for path in config or CONFIGS]
+    except ConfigError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_CONFIG) from exc
     written += _table(thesis.calibration_sizes_table(), out)
     _simulations(results, out, written, skipped)
-    for path in config if config is not None else CONFIGS:
-        try:
-            _experiment(load_config(path), out, written, skipped)
-        except ConfigError as exc:
-            typer.echo(f"error: {exc}", err=True)
-            raise typer.Exit(EXIT_CONFIG) from exc
+    for experiment in configs:
+        if experiment.data not in datasets:
+            datasets.add(experiment.data)
+            _data(experiment, settings, out, written, skipped)
+        _experiment(experiment, out, written, skipped)
     _study(study, out, written, skipped)
     typer.echo(f"Wrote {len(written)} files to {out}.")
     for reason in skipped:
@@ -82,6 +97,24 @@ def _simulations(results: Path, out: Path, written: list[Path], skipped: list[st
         skipped.append(f"the audit simulation: no {audit}; run make verify-guarantee")
 
 
+def _data(
+    config: ExperimentConfig, settings: Settings, out: Path, written: list[Path], skipped: list[str]
+) -> None:
+    """the items of the config's dataset per field, named after the first config that uses it."""
+    try:
+        items = load_items(config, settings.document)
+    except ConfigError as exc:
+        skipped.append(f"the data of experiment {config.name}: {exc}")
+        return
+    table = thesis.data_table(
+        [(item.document.paper_id, item.spec, item.gold) for item in items],
+        name="data",
+        dataset=DATASETS[config.data.kind],
+        note=EXCLUSIONS.get(config.data.kind),
+    )
+    written += _table(table, out, prefix=config.name)
+
+
 def _experiment(
     config: ExperimentConfig, out: Path, written: list[Path], skipped: list[str]
 ) -> None:
@@ -97,16 +130,13 @@ def _experiment(
         written += _table(thesis.ablation_table(tables.by_group), out, prefix=config.name)
         return
     dataset = DATASETS[config.data.kind]
-    written += _table(
-        thesis.main_table(tables.by_group, variant, name="results", dataset=dataset),
-        out,
-        prefix=config.name,
-    )
     written += _table(thesis.baselines_table(tables.baselines, variant), out, prefix=config.name)
     for model in config.models:
-        written += _table(
-            thesis.fields_table(tables.by_field, variant, model.name), out, prefix=config.name
-        )
+        for table in (
+            thesis.main_table(tables.by_group, variant, model.name, dataset=dataset),
+            thesis.fields_table(tables.by_field, variant, model.name),
+        ):
+            written += _table(table, out, prefix=config.name)
     written += figures.draw(tables, variant, out / "figures" / config.name, FORMATS)
 
 

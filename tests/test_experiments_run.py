@@ -5,76 +5,29 @@ the numbers are not results; the test checks that the script writes every table,
 the manifest, and fails cleanly without a model.
 """
 
-import csv
 import json
 import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 from exga import experiment
-from exga.benchmark import FIELDS
 from exga.llm.mock import MockCall, MockLLMClient
 from exga.records import load_records
 from exga.settings import ExtractionSettings, Settings
 
 REPOSITORY = Path(__file__).parents[1]
 RUN = REPOSITORY / "experiments" / "run.py"
-COLUMNS = (
-    "id",
-    "pmcid",
-    "outcome",
-    "intervention",
-    "comparator",
-    "outcome_type",
-    "split",
-    "is_data_in_figure_graphics",
-    "is_table_in_graphic_format",
-    *dict.fromkeys(field for fields in FIELDS.values() for field in fields),
-)
 PATTERNS = {
     "intervention_group_size": r"Drug group: (\d+) patients",
     "intervention_events": r"Drug group: \d+ patients, (\d+) events",
     "comparator_group_size": r"Placebo group: (\d+) patients",
     "comparator_events": r"Placebo group: \d+ patients, (\d+) events",
 }
-
-
-def write_benchmark(folder: Path, papers: int) -> None:
-    (folder / "texts").mkdir(parents=True)
-    rows = []
-    for index in range(papers):
-        pmcid = 1000 + index
-        sizes, events = (50 + index, 60 + index), (5 + index % 4, 9 + index % 5)
-        (folder / "texts" / f"PMC{pmcid}.md").write_text(
-            f"Trial PMC{pmcid}. Drug group: {sizes[0]} patients, {events[0]} events. "
-            f"Placebo group: {sizes[1]} patients, {events[1]} events.",
-            encoding="utf-8",
-        )
-        row = dict.fromkeys(COLUMNS, "")
-        row |= {
-            "id": str(index),
-            "pmcid": str(pmcid),
-            "outcome": "events",
-            "intervention": "drug",
-            "comparator": "placebo",
-            "outcome_type": "binary",
-            "split": "TEST",
-            "is_data_in_figure_graphics": "FALSE",
-            "is_table_in_graphic_format": "FALSE",
-            "intervention_group_size": str(sizes[0]),
-            "comparator_group_size": str(sizes[1]),
-            "intervention_events": str(events[0]),
-            "comparator_events": str(events[1]),
-        }
-        rows.append(row)
-    with (folder / experiment.ANNOTATIONS_FILE).open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=COLUMNS)
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def mock_model(call: MockCall, index: int) -> str:
@@ -102,8 +55,8 @@ def run_script(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 @pytest.fixture
-def config_path(tmp_path: Path) -> Path:
-    write_benchmark(tmp_path / "benchmark", papers=40)
+def config_path(tmp_path: Path, write_benchmark: Callable[[Path, int], None]) -> Path:
+    write_benchmark(tmp_path / "benchmark", 40)
     path = tmp_path / "e2e.yaml"
     content = {
         "name": "e2e",

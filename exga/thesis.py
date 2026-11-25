@@ -3,13 +3,15 @@
 each function takes rows as `exga.tables.read_rows` returns them and gives a ThesisTable:
 display rows plus the LaTeX caption and headers. numbers are formatted here, once, so the
 LaTeX and CSV versions agree. nothing is computed that the result files do not hold, except
-the calibration sizes, which come from `exga.calibrate.required_n`.
+the calibration sizes, which come from `exga.calibrate.required_n`, and the item counts of
+a dataset, from the items the experiments load.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from exga.calibrate import required_n
+from exga.schemas import FieldSpec
 from exga.study import TRUST_STATEMENTS
 from exga.tables import Row, latex_table
 
@@ -17,58 +19,84 @@ NOT_AVAILABLE = "n/a"
 PERCENT = 100
 ALL_FIELDS = "all"
 POPULATIONS = {
-    "power_beta_4_1_g1": "monotone: Beta(4, 1) scores, P(wrong) = 1 - s",
-    "power_beta_8_1_g3": "monotone: Beta(8, 1) scores, P(wrong) = 1 - s cubed",
-    "discrete_ties": "monotone with ties: five score levels",
-    "non_monotone_mid_band": "not monotone: error band at 0.8-0.9",
-    "non_monotone_top_band": "not monotone: errors above 0.995",
+    "power_beta_4_1_g1": "monotone, linear",
+    "power_beta_8_1_g3": "monotone, cubic",
+    "discrete_ties": "monotone, five levels",
+    "non_monotone_mid_band": "not monotone, middle band",
+    "non_monotone_top_band": "not monotone, top band",
 }
-"""the guarantee simulation's populations (exga.simulation), described for a reader."""
+"""short names of the simulation's populations (exga.simulation.reference_populations)."""
+POPULATION_NOTE = (
+    r"Populations (score $s$): monotone, linear: $s \sim \mathrm{Beta}(4, 1)$, "
+    r"$P(\mathrm{wrong} \mid s) = 1 - s$; monotone, cubic: $s \sim \mathrm{Beta}(8, 1)$, "
+    r"$P(\mathrm{wrong} \mid s) = 1 - s^3$; monotone, five levels: $s$ is 0.2, 0.4, 0.6, 0.8 "
+    r"or 1 with probability 0.05, 0.05, 0.1, 0.2 and 0.6, and wrong with probability 0.7, "
+    r"0.5, 0.3, 0.12 and 0.04; not monotone, middle band: $s \sim \mathrm{Beta}(4, 1)$, wrong "
+    r"with probability 0.25 for $0.8 < s \le 0.9$ and 0.02 otherwise; not monotone, top band: "
+    r"$s \sim \mathrm{Beta}(5, 1)$, wrong with probability 0.3 for $s > 0.995$ and 0.02 "
+    r"otherwise."
+)
+"""each population's definition, as set in exga.simulation, for the simulation tables."""
 BASELINE_NAMES = {
     "accept_all": "accept all",
     "fixed_cutoff": "fixed cut-off at {cutoff}",
     "verify_all": "verify all",
 }
 STUDY_MEASURES = {
-    "manual_minutes": ("Minutes, by hand", "minutes"),
-    "tool_minutes": ("Minutes, with exga", "minutes"),
-    "minutes_difference": ("Minutes, exga minus by hand", "minutes"),
-    "manual_accuracy": ("Accuracy, by hand", "rate"),
-    "tool_accuracy": ("Accuracy, with exga", "rate"),
-    "accuracy_difference": ("Accuracy, exga minus by hand", "points"),
-    "tool_corrected_share": ("Share of values corrected with exga", "rate"),
-    "sus": ("SUS score (0-100)", "minutes"),
+    "manual_minutes": ("Minutes, by hand", "number"),
+    "tool_minutes": ("Minutes, with exga", "number"),
+    "minutes_difference": ("Minutes, difference", "signed"),
+    "manual_accuracy": ("Accuracy, by hand (%)", "rate"),
+    "tool_accuracy": ("Accuracy, with exga (%)", "rate"),
+    "accuracy_difference": ("Accuracy, difference (pp)", "points"),
+    "tool_corrected_share": ("Values corrected with exga (%)", "rate"),
+    "sus": ("SUS score (0-100)", "number"),
 }
-"""participants.csv measures: label and unit; "minutes" also serves any plain number."""
+"""participants.csv measures: label, which names the unit, and how values are shown."""
 ORDER_MEASURES = ("minutes_difference", "accuracy_difference")
 """the measures reported again by which task came first, to show order effects."""
 SOURCE = r"Source: \texttt{{{path}}}."
+LINE_BREAK = r"\\"
+PERCENT_UNIT = r"(\%)"
+"""set in the header of a column of rates, whose cells are percentages without the sign."""
 
 
 @dataclass(frozen=True)
 class ThesisTable:
-    """one table: its file name, LaTeX caption, (key, LaTeX header) columns and rows."""
+    """one table: its file name, LaTeX caption, (key, LaTeX header) columns and rows.
+
+    align is the LaTeX column spec; by default the first column is text and the rest numbers.
+    """
 
     name: str
     caption: str
     columns: tuple[tuple[str, str], ...]
     rows: list[Row] = field(default_factory=list)
     note: str | None = None
+    align: str | None = None
 
     def latex(self) -> str:
         """the table as a booktabs LaTeX float labelled tab:<name>."""
         return latex_table(
-            self.rows, self.columns, caption=self.caption, label=f"tab:{self.name}", note=self.note
+            self.rows,
+            self.columns,
+            caption=self.caption,
+            label=f"tab:{self.name}",
+            align=self.align,
+            note=self.note,
         )
 
 
 def percent(value: object) -> str:
-    """a rate as a percentage with one decimal; None is n/a."""
-    return NOT_AVAILABLE if value is None else f"{float(str(value)) * PERCENT:.1f}%"
+    """a rate as a percentage with one decimal and no sign: the header names the unit.
+
+    None is n/a.
+    """
+    return NOT_AVAILABLE if value is None else f"{_tenths(float(str(value)) * PERCENT):.1f}"
 
 
 def interval(low: object, high: object) -> str:
-    """a confidence interval of rates; n/a unless both ends exist."""
+    """a confidence interval of rates, in percent; n/a unless both ends exist."""
     if low is None or high is None:
         return NOT_AVAILABLE
     return f"[{percent(low)}, {percent(high)}]"
@@ -76,7 +104,7 @@ def interval(low: object, high: object) -> str:
 
 def points(value: object) -> str:
     """a difference of two rates in percentage points, with its sign."""
-    return NOT_AVAILABLE if value is None else f"{float(str(value)) * PERCENT:+.1f} pp"
+    return NOT_AVAILABLE if value is None else f"{_tenths(float(str(value)) * PERCENT):+.1f}"
 
 
 def guarantee_table(rows: Sequence[Row]) -> ThesisTable:
@@ -93,9 +121,9 @@ def guarantee_table(rows: Sequence[Row]) -> ThesisTable:
             ("population", "Population"),
             ("alpha", r"$\alpha$"),
             ("n_cal", "Items"),
-            ("certified", "Certified"),
-            ("violated", "Error above $\\alpha$"),
-            ("within", r"Within $\delta + 0.02$"),
+            ("certified", _stack("Certified", PERCENT_UNIT)),
+            ("violated", _stack("Error above", rf"$\alpha$ {PERCENT_UNIT}")),
+            ("within", _stack("Within", r"$\delta + 0.02$")),
         ),
         rows=_first_only(
             [
@@ -111,7 +139,8 @@ def guarantee_table(rows: Sequence[Row]) -> ThesisTable:
             ],
             "population",
         ),
-        note=SOURCE.format(path="results/guarantee\\_simulation.csv"),
+        note=f"{POPULATION_NOTE} {_source('results/guarantee_simulation.csv')}",
+        align=_align("l", numbers=5),
     )
 
 
@@ -128,9 +157,9 @@ def audit_table(rows: Sequence[Row]) -> ThesisTable:
         columns=(
             ("population", "Population"),
             ("policy", "Records"),
-            ("versions", "Certified versions"),
-            ("version_violated", "Version violations"),
-            ("ever_violated", "Ever violated"),
+            ("versions", _stack("Certified", "versions")),
+            ("version_violated", _stack("Version", f"violations {PERCENT_UNIT}")),
+            ("ever_violated", _stack("Ever", f"violated {PERCENT_UNIT}")),
         ),
         rows=_first_only(
             [
@@ -145,7 +174,8 @@ def audit_table(rows: Sequence[Row]) -> ThesisTable:
             ],
             "population",
         ),
-        note=SOURCE.format(path="results/audit\\_simulation.csv"),
+        note=f"{POPULATION_NOTE} {_source('results/audit_simulation.csv')}",
+        align=_align("l", "l", numbers=3),
     )
 
 
@@ -177,54 +207,113 @@ def calibration_sizes_table(
     )
 
 
-def main_table(by_group: Sequence[Row], variant: str, *, name: str, dataset: str) -> ThesisTable:
-    """by_group.csv for one score variant: the spec 11.2 table, all fields first."""
-    rows = sorted(
-        (row for row in by_group if row["variant"] == variant),
-        key=lambda row: (str(row["model"]), row["group"] != ALL_FIELDS, str(row["group"])),
+def data_table(
+    items: Sequence[tuple[str, FieldSpec, str | None]],
+    *,
+    name: str,
+    dataset: str,
+    note: str | None = None,
+) -> ThesisTable:
+    """items per field, and how many the paper does not report; items are (paper, field, gold).
+
+    fields appear in the order of their first item, then a total over all fields.
+    """
+    counts: dict[str, list[int]] = {}
+    groups: dict[str, str] = {}
+    for _, spec, gold in items:
+        groups.setdefault(spec.name, spec.group)
+        count = counts.setdefault(spec.name, [0, 0])
+        count[0] += 1
+        count[1] += gold is None
+    papers = len({paper for paper, _, _ in items})
+    rows: list[Row] = [
+        {"field": field, "group": groups[field], "items": _count(n), "not_reported": _count(nr)}
+        for field, (n, nr) in counts.items()
+    ]
+    rows.append(
+        {
+            "field": "all fields",
+            "group": "",
+            "items": _count(len(items)),
+            "not_reported": _count(sum(nr for _, nr in counts.values())),
+        }
     )
     return ThesisTable(
         name=name,
         caption=(
-            rf"Results on {dataset} by model, field group and error level $\alpha$. Accepted "
-            r"and error among accepted are on the test papers of the primary split, with 95\% "
-            r"bootstrap intervals over papers; certified share and test error above $\alpha$ "
-            r"are over all splits."
+            f"The items of {dataset}: one per paper and field, from {_count(papers)} papers, "
+            "and how many of them the paper does not report."
         ),
         columns=(
-            ("model", "Model"),
+            ("field", "Field"),
+            ("group", "Group"),
+            ("items", "Items"),
+            ("not_reported", _stack("Not", "reported")),
+        ),
+        rows=rows,
+        note=note,
+        align=_align("l", "l", numbers=2),
+    )
+
+
+def main_table(by_group: Sequence[Row], variant: str, model: str, *, dataset: str) -> ThesisTable:
+    """by_group.csv for one model and score variant: the spec 11.2 table, all fields first.
+
+    one table per model keeps it within a portrait page.
+    """
+    rows = sorted(
+        (row for row in by_group if row["variant"] == variant and row["model"] == model),
+        key=lambda row: (
+            row["group"] != ALL_FIELDS,
+            str(row["group"]),
+            float(str(row["alpha"])),
+        ),
+    )
+    return ThesisTable(
+        name=f"results_{model}",
+        caption=(
+            rf"Results of model {_text(model)} on {dataset} by field group and error level "
+            r"$\alpha$. Raw accuracy, accepted, error among accepted (with a 95\% bootstrap "
+            r"interval over papers) and certified are on the test papers of the primary split; "
+            r"certified share and test error above $\alpha$ are over all splits."
+        ),
+        columns=(
             ("group", "Fields"),
             ("alpha", r"$\alpha$"),
             ("items", "Items"),
-            ("accuracy", "Raw accuracy"),
-            ("accepted", "Accepted"),
-            ("error", "Error among accepted"),
+            ("accuracy", _stack("Raw", "accuracy", PERCENT_UNIT)),
+            ("accepted", _stack("Accepted", PERCENT_UNIT)),
+            ("error", _stack("Error among", f"accepted {PERCENT_UNIT}")),
             ("certified", "Certified"),
-            ("certified_share", "Certified share"),
-            ("above_alpha", r"Test error above $\alpha$"),
+            ("certified_share", _stack("Certified", f"share {PERCENT_UNIT}")),
+            ("above_alpha", _stack("Test error", r"above $\alpha$", PERCENT_UNIT)),
         ),
-        rows=[
-            {
-                "model": str(row["model"]),
-                "group": "all fields" if row["group"] == ALL_FIELDS else str(row["group"]),
-                "alpha": _level(row["alpha"]),
-                "items": str(row["test_items"]),
-                "accuracy": percent(row["raw_accuracy"]),
-                "accepted": _with_interval(
-                    row["acceptance_rate"], row["acceptance_low"], row["acceptance_high"]
-                ),
-                "error": _with_interval(row["realised_error"], row["error_low"], row["error_high"]),
-                "certified": _yes(row["certified"]),
-                "certified_share": percent(row["certified_share"]),
-                "above_alpha": percent(row["error_above_alpha_rate"]),
-            }
-            for row in rows
-        ],
+        rows=_first_only(
+            [
+                {
+                    "group": "all fields" if row["group"] == ALL_FIELDS else str(row["group"]),
+                    "alpha": _level(row["alpha"]),
+                    "items": _count(row["test_items"]),
+                    "accuracy": percent(row["raw_accuracy"]),
+                    "accepted": percent(row["acceptance_rate"]),
+                    "error": _with_interval(
+                        row["realised_error"], row["error_low"], row["error_high"]
+                    ),
+                    "certified": _yes(row["certified"]),
+                    "certified_share": percent(row["certified_share"]),
+                    "above_alpha": percent(row["error_above_alpha_rate"]),
+                }
+                for row in rows
+            ],
+            "group",
+        ),
         note=(
-            r"Test error above $\alpha$ overstates how often the guarantee fails: with about "
-            r"26 test items per field, chance alone often puts the observed error above "
-            r"$\alpha$ (ADR 0011)."
+            r"Test error above $\alpha$ overstates how often the guarantee fails: with a few "
+            r"dozen test items per field or fewer, chance alone often puts the observed error "
+            r"above $\alpha$ (ADR 0011). The guarantee itself is checked by simulation, where "
+            r"the true error is known."
         ),
+        align=_align("l", numbers=8),
     )
 
 
@@ -239,23 +328,27 @@ def baselines_table(baselines: Sequence[Row], variant: str) -> ThesisTable:
         columns=(
             ("model", "Model"),
             ("method", "Method"),
-            ("accepted", "Accepted"),
-            ("error", "Error among accepted"),
-            ("mean_accepted", "Mean accepted"),
-            ("mean_error", "Mean error"),
+            ("accepted", _stack("Accepted", PERCENT_UNIT)),
+            ("error", _stack("Error among", f"accepted {PERCENT_UNIT}")),
+            ("mean_accepted", _stack("Mean", f"accepted {PERCENT_UNIT}")),
+            ("mean_error", _stack("Mean", f"error {PERCENT_UNIT}")),
         ),
-        rows=[
-            {
-                "model": str(row["model"]),
-                "method": BASELINE_NAMES[str(row["baseline"])].format(cutoff=row["cutoff"]),
-                "accepted": percent(row["acceptance_rate"]),
-                "error": percent(row["realised_error"]),
-                "mean_accepted": percent(row["mean_acceptance_rate"]),
-                "mean_error": percent(row["mean_realised_error"]),
-            }
-            for row in baselines
-            if row["variant"] == variant
-        ],
+        rows=_first_only(
+            [
+                {
+                    "model": str(row["model"]),
+                    "method": BASELINE_NAMES[str(row["baseline"])].format(cutoff=row["cutoff"]),
+                    "accepted": percent(row["acceptance_rate"]),
+                    "error": percent(row["realised_error"]),
+                    "mean_accepted": percent(row["mean_acceptance_rate"]),
+                    "mean_error": percent(row["mean_realised_error"]),
+                }
+                for row in baselines
+                if row["variant"] == variant
+            ],
+            "model",
+        ),
+        align=_align("l", "l", numbers=4),
     )
 
 
@@ -271,27 +364,38 @@ def ablation_table(by_group: Sequence[Row]) -> ThesisTable:
             ("model", "Model"),
             ("variant", "Score"),
             ("alpha", r"$\alpha$"),
-            ("mean_accepted", "Mean accepted"),
-            ("mean_error", "Mean error among accepted"),
-            ("certified_share", "Certified share"),
+            ("mean_accepted", _stack("Mean", f"accepted {PERCENT_UNIT}")),
+            ("mean_error", _stack("Mean error", f"among accepted {PERCENT_UNIT}")),
+            ("certified_share", _stack("Certified", f"share {PERCENT_UNIT}")),
         ),
-        rows=[
-            {
-                "model": str(row["model"]),
-                "variant": str(row["variant"]),
-                "alpha": _level(row["alpha"]),
-                "mean_accepted": percent(row["mean_acceptance_rate"]),
-                "mean_error": percent(row["mean_realised_error"]),
-                "certified_share": percent(row["certified_share"]),
-            }
-            for row in by_group
-            if row["group"] == ALL_FIELDS
-        ],
+        rows=_first_only(
+            [
+                {
+                    "model": str(row["model"]),
+                    "variant": str(row["variant"]),
+                    "alpha": _level(row["alpha"]),
+                    "mean_accepted": percent(row["mean_acceptance_rate"]),
+                    "mean_error": percent(row["mean_realised_error"]),
+                    "certified_share": percent(row["certified_share"]),
+                }
+                for row in by_group
+                if row["group"] == ALL_FIELDS
+            ],
+            "model",
+            "variant",
+        ),
+        align=_align("l", "l", numbers=4),
     )
 
 
 def fields_table(by_field: Sequence[Row], variant: str, model: str) -> ThesisTable:
-    """by_field.csv for one model and variant: which fields certify, at which level."""
+    """by_field.csv for one model and variant: which fields certify, at which level.
+
+    rows are grouped by field, in the order the fields first appear, then by level.
+    """
+    wanted = [row for row in by_field if row["variant"] == variant and row["model"] == model]
+    order = list(dict.fromkeys(str(row["field"]) for row in wanted))
+    wanted.sort(key=lambda row: (order.index(str(row["field"])), float(str(row["alpha"]))))
     return ThesisTable(
         name=f"fields_{model}",
         caption=(
@@ -302,22 +406,26 @@ def fields_table(by_field: Sequence[Row], variant: str, model: str) -> ThesisTab
             ("field", "Field"),
             ("group", "Group"),
             ("alpha", r"$\alpha$"),
-            ("certified", "Certified share"),
-            ("mean_accepted", "Mean accepted"),
-            ("accuracy", "Raw accuracy"),
+            ("certified", _stack("Certified", f"share {PERCENT_UNIT}")),
+            ("mean_accepted", _stack("Mean", f"accepted {PERCENT_UNIT}")),
+            ("accuracy", _stack("Raw", f"accuracy {PERCENT_UNIT}")),
         ),
-        rows=[
-            {
-                "field": str(row["field"]),
-                "group": str(row["group"]),
-                "alpha": _level(row["alpha"]),
-                "certified": percent(row["certified_share"]),
-                "mean_accepted": percent(row["mean_acceptance_rate"]),
-                "accuracy": percent(row["raw_accuracy"]),
-            }
-            for row in by_field
-            if row["variant"] == variant and row["model"] == model
-        ],
+        rows=_first_only(
+            [
+                {
+                    "field": str(row["field"]),
+                    "group": str(row["group"]),
+                    "alpha": _level(row["alpha"]),
+                    "certified": percent(row["certified_share"]),
+                    "mean_accepted": percent(row["mean_acceptance_rate"]),
+                    "accuracy": percent(row["raw_accuracy"]),
+                }
+                for row in wanted
+            ],
+            "field",
+            "group",
+        ),
+        align=_align("l", "l", numbers=4),
     )
 
 
@@ -333,7 +441,8 @@ def study_table(summary: Sequence[Row]) -> ThesisTable:
         name="user_study",
         caption=(
             r"User study: time, accuracy and usability for each task, and the within-person "
-            r"differences (exga minus by hand), also by which task came first."
+            r"differences (exga minus by hand), also by which task came first. "
+            r"Quartiles and range are given as [low, high]; pp: percentage points."
         ),
         columns=(
             ("participants", "Participants"),
@@ -345,7 +454,11 @@ def study_table(summary: Sequence[Row]) -> ThesisTable:
             ("sd", "SD"),
             ("range", "Range"),
         ),
-        rows=[_study_row(row) for row in wanted if row["measure"] in STUDY_MEASURES],
+        rows=_first_only(
+            [_study_row(row) for row in wanted if row["measure"] in STUDY_MEASURES],
+            "participants",
+        ),
+        align=_align("l", _wrap(r"0.28\linewidth"), numbers=6),
     )
 
 
@@ -372,41 +485,71 @@ def trust_table(trust: Sequence[Row]) -> ThesisTable:
             }
             for statement, row in zip(TRUST_STATEMENTS, trust, strict=True)
         ],
+        align=_align(_wrap(r"0.5\linewidth"), numbers=7),
     )
 
 
 def _study_row(row: Row) -> Row:
     label, unit = STUDY_MEASURES[str(row["measure"])]
-    show = {"rate": percent, "points": points, "minutes": _number}[unit]
+    show = {"rate": percent, "points": points, "number": _number, "signed": _signed}[unit]
+    # a standard deviation has no sign
+    spread = percent if unit in ("rate", "points") else _number
     return {
         "participants": str(row["group"]),
         "measure": label,
         "n": str(row["n"]),
         "median": show(row["median"]),
-        "iqr": NOT_AVAILABLE if row["q1"] is None else f"[{show(row['q1'])}, {show(row['q3'])}]",
+        "iqr": _pair(show, row["q1"], row["q3"]),
         "mean": show(row["mean"]),
-        "sd": NOT_AVAILABLE if row["sd"] is None else _spread(row["sd"], unit),
-        "range": (
-            NOT_AVAILABLE
-            if row["minimum"] is None
-            else f"{show(row['minimum'])} to {show(row['maximum'])}"
-        ),
+        "sd": spread(row["sd"]),
+        "range": _pair(show, row["minimum"], row["maximum"]),
     }
 
 
-def _spread(value: object, unit: str) -> str:
-    """a standard deviation, unsigned: plain for minutes and scores, percentage points for rates."""
-    if unit == "minutes":
-        return _number(value)
-    return f"{float(str(value)) * PERCENT:.1f} pp"
+def _pair(show: Callable[[object], str], low: object, high: object) -> str:
+    """quartiles or a range as [low, high]; n/a unless both ends exist."""
+    return NOT_AVAILABLE if low is None or high is None else f"[{show(low)}, {show(high)}]"
 
 
-def _first_only(rows: list[Row], key: str) -> list[Row]:
-    """blank a cell that repeats the one above it, so a long label shows once per block."""
+def _align(*text: str, numbers: int) -> str:
+    """a LaTeX column spec: the leading text columns as given, then numbers right-aligned.
+
+    a text column is "l", or `_wrap(width)` for text too long for one line.
+    """
+    return "".join(text) + "r" * numbers
+
+
+def _source(path: str) -> str:
+    """the note naming a table's results file, in typewriter type."""
+    return SOURCE.format(path=path.replace("_", r"\_"))
+
+
+def _wrap(width: str) -> str:
+    """a column of text that wraps at width, ragged right (needs \\usepackage{array})."""
+    return rf">{{\raggedright\arraybackslash}}p{{{width}}}"
+
+
+def _stack(*lines: str, align: str = "r") -> str:
+    """a header set on several lines (core LaTeX's shortstack), aligned like its column."""
+    return rf"\shortstack[{align}]{{" + LINE_BREAK.join(lines) + "}"
+
+
+def _first_only(rows: list[Row], *keys: str) -> list[Row]:
+    """blank labels that repeat the row above, so each block is named once.
+
+    keys are nested blocks, outermost first: a label is blanked only when it and every
+    label before it repeat, so a new outer block names its inner labels again.
+    """
     shown: list[Row] = []
     for index, row in enumerate(rows):
-        repeat = index > 0 and row[key] == rows[index - 1][key]
-        shown.append(row | {key: ""} if repeat else row)
+        blank: Row = {}
+        if index > 0:
+            above = rows[index - 1]
+            for depth, key in enumerate(keys):
+                if any(row[k] != above[k] for k in keys[: depth + 1]):
+                    break
+                blank[key] = ""
+        shown.append(row | blank)
     return shown
 
 
@@ -424,12 +567,22 @@ def _with_interval(value: object, low: object, high: object) -> str:
 
 
 def _level(alpha: object) -> str:
-    """an error level as a whole percentage, e.g. 5%."""
-    return f"{float(str(alpha)) * PERCENT:.0f}%"
+    """an error level with two decimals, as the method page writes it: 0.05."""
+    return f"{float(str(alpha)):.2f}"
 
 
 def _number(value: object) -> str:
-    return NOT_AVAILABLE if value is None else f"{float(str(value)):.1f}"
+    return NOT_AVAILABLE if value is None else f"{_tenths(float(str(value))):.1f}"
+
+
+def _signed(value: object) -> str:
+    """a difference with its sign, e.g. +3.0 minutes."""
+    return NOT_AVAILABLE if value is None else f"{_tenths(float(str(value))):+.1f}"
+
+
+def _tenths(value: float) -> float:
+    """value rounded to one decimal, so a tiny negative value shows as 0.0, not -0.0."""
+    return round(value, 1) + 0.0  # adding 0.0 turns a negative zero into zero
 
 
 def _yes(value: object) -> str:

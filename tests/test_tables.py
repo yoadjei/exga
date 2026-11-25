@@ -40,6 +40,13 @@ def test_a_latex_table_escapes_cells_but_not_headers_or_caption() -> None:
     assert lines[-2:] == [r"\end{tabular}", r"\end{table}"]
 
 
+def test_a_latex_table_is_set_small_with_narrow_column_gaps() -> None:
+    lines = latex_table([{"x": "1"}], [("x", "X")], caption="C", label="tab:c").splitlines()
+
+    begin = lines.index(r"\begin{tabular}{l}")
+    assert {r"\small", r"\setlength{\tabcolsep}{4pt}"} <= set(lines[:begin])
+
+
 def test_a_latex_table_takes_an_alignment_and_a_note() -> None:
     text = latex_table(
         [{"x": "1"}], [("x", "X")], caption="C", label="tab:c", align="c", note="Source: x.csv"

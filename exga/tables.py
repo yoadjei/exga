@@ -62,12 +62,16 @@ def latex_table(
     """a booktabs table (needs \\usepackage{booktabs}) of the given (key, header) columns.
 
     cells are escaped; headers, caption and note are LaTeX as given, so they may hold math
-    such as $\\alpha$. align defaults to the first column left and the rest right.
+    such as $\\alpha$. align defaults to the first column left and the rest right; a column
+    spec such as >{\\raggedright\\arraybackslash}p{5cm} also needs \\usepackage{array}. the
+    table is set in \\small with 4pt column gaps, so most fit a portrait page.
     """
     spec = align or "l" + "r" * (len(columns) - 1)
     lines = [
         r"\begin{table}[htbp]",
         r"\centering",
+        r"\small",
+        r"\setlength{\tabcolsep}{4pt}",
         rf"\caption{{{caption}}}",
         rf"\label{{{label}}}",
         rf"\begin{{tabular}}{{{spec}}}",
