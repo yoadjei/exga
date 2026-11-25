@@ -153,7 +153,11 @@ class Extraction(_Record):
     field: FieldName
     samples: tuple[SampleAnswer, ...]
     value: str | None
-    """the greedy answer, which is always the candidate; None means "not reported"."""
+    """the greedy answer, which is always the candidate; None means "not reported", unless
+    `failed` is set."""
+    failed: bool = False
+    """the model gave no usable greedy answer, so value None means unknown, not "not
+    reported"; such items score 0."""
     evidence: str | None
     location: tuple[SpanLocation, ...] = ()
     """where the evidence was found; empty when not found or the source is not a PDF."""

@@ -81,6 +81,25 @@ class DocumentSettings(BaseModel):
     """page rendering scale for highlights: 1.5 gives 108 dpi, legible without large images."""
 
 
+class ScoreSettings(BaseModel):
+    """weights of the default combined score, a weighted average of the signals (spec 7.4).
+
+    a signal that is unavailable for an item drops out and the other weights are rescaled.
+    agreement is always available, so its weight must be positive.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid", use_attribute_docstrings=True)
+
+    agreement_weight: float = Field(default=1.0, gt=0.0)
+    """weight of sample agreement."""
+
+    logprob_weight: float = Field(default=1.0, ge=0.0)
+    """weight of the greedy value's token probability; 0 ignores it."""
+
+    source_weight: float = Field(default=1.0, ge=0.0)
+    """weight of the evidence check against the paper; 0 ignores it."""
+
+
 class ExtractionSettings(BaseModel):
     """how answers are sampled from the model (spec 7.3)."""
 
@@ -195,6 +214,9 @@ class Settings(BaseSettings):
 
     extraction: ExtractionSettings = Field(default_factory=ExtractionSettings)
     """answer sampling."""
+
+    score: ScoreSettings = Field(default_factory=ScoreSettings)
+    """combined-score weights."""
 
     hosted: HostedSettings = Field(default_factory=HostedSettings)
     """the chat-completions model back-end."""
