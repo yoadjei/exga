@@ -105,6 +105,17 @@ def test_unknown_field_spec_option_is_rejected() -> None:
         )
 
 
+def test_categorical_field_with_distinct_allowed_values_is_accepted() -> None:
+    spec = FieldSpec(
+        name="study_design",
+        description="design of the study as reported by the authors",
+        group="categorical",
+        allowed_values=("rct", "cohort", "case_control"),
+    )
+
+    assert spec.allowed_values == ("rct", "cohort", "case_control")
+
+
 @pytest.mark.parametrize("allowed", [None, ["rct"], ["rct", "rct"]])
 def test_categorical_field_needs_two_distinct_allowed_values(allowed: list[str] | None) -> None:
     with pytest.raises(ValidationError, match="allowed_values"):
@@ -145,9 +156,12 @@ def test_span_pages_are_one_based() -> None:
         SpanLocation(page=0, bbox=(0.0, 0.0, 10.0, 10.0))
 
 
-def test_span_bbox_corners_must_be_ordered() -> None:
+@pytest.mark.parametrize(
+    "bbox", [(100.0, 50.0, 90.0, 60.0), (10.0, 60.0, 90.0, 50.0)], ids=["x-reversed", "y-reversed"]
+)
+def test_span_bbox_corners_must_be_ordered(bbox: tuple[float, float, float, float]) -> None:
     with pytest.raises(ValidationError, match="bbox"):
-        SpanLocation(page=1, bbox=(100.0, 50.0, 90.0, 60.0))
+        SpanLocation(page=1, bbox=bbox)
 
 
 def test_new_extraction_is_undecided_and_unlocated() -> None:
@@ -155,6 +169,15 @@ def test_new_extraction_is_undecided_and_unlocated() -> None:
 
     assert extraction.decision is None
     assert extraction.location == ()
+
+
+def test_extraction_keeps_every_location_where_the_evidence_was_found() -> None:
+    boxes = [{"page": 2, "bbox": (72.0, 100.0, 300.0, 112.0)}, {"page": 5, "bbox": (0, 0, 0, 0)}]
+
+    extraction = make_extraction(location=boxes)
+
+    assert [span.page for span in extraction.location] == [2, 5]
+    assert extraction.location[0] == SpanLocation(page=2, bbox=(72.0, 100.0, 300.0, 112.0))
 
 
 @pytest.mark.parametrize("score", [-0.01, 1.01])
