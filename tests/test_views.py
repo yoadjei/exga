@@ -14,6 +14,7 @@ from exga.views import (
     field_status_rows,
     next_step,
     paper_rows,
+    plain,
     required_n_rows,
     review_rows,
 )
@@ -235,3 +236,15 @@ def test_paper_rows_count_the_fields_extracted_per_paper() -> None:
         {"Paper": "trial.pdf", "Type": "PDF", "Fields extracted": "2 of 3"},
         {"Paper": "notes.md", "Type": "Text", "Fields extracted": "0 of 3"},
     ]
+
+
+@pytest.mark.parametrize(
+    ("text", "shown"),
+    [
+        ("trial.pdf", r"trial\.pdf"),
+        ("![x](https://tracker.example/p.png)", r"\!\[x\]\(https\:\/\/tracker\.example\/p\.png\)"),
+        ("**bold** :smile: <b>", r"\*\*bold\*\* \:smile\: \<b\>"),
+    ],
+)
+def test_plain_text_cannot_become_markdown(text: str, shown: str) -> None:
+    assert plain(text) == shown

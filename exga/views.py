@@ -4,6 +4,7 @@ status is never colour alone (spec 0A.6): every row states it with a symbol and 
 the colours behind it keep dark text at WCAG AA contrast or better.
 """
 
+import re
 from collections.abc import Mapping, Sequence
 
 from exga.calibrate import required_n
@@ -22,6 +23,14 @@ DISPLAY_ALPHAS = (0.05, 0.1, 0.2)
 NOT_CALIBRATED = "No checked values yet: import some, or run an audit"
 # sRGB channels at or below this are linear in WCAG 2's relative luminance formula
 _SRGB_LINEAR_LIMIT = 0.04045
+# characters that markdown, Streamlit's :emoji: and :material/icon: codes, or HTML treat as
+# syntax; a file name or model answer must not turn into a link, image or icon on the page
+_MARKDOWN_SYNTAX = re.compile(r"([\\`*_{}\[\]()#+\-.!|<>~$:/])")
+
+
+def plain(text: str) -> str:
+    """text escaped so Streamlit's markdown shows it as typed, for messages that quote names."""
+    return _MARKDOWN_SYNTAX.sub(r"\\\1", text)
 
 
 def status_css(decision: Decision | None) -> str:
