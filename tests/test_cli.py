@@ -192,7 +192,7 @@ def test_check_gold_rejects_a_malformed_file(tmp_path: Path) -> None:
     assert "line 2" in stderr
 
 
-def test_the_app_command_starts_streamlit_without_usage_statistics(
+def test_the_app_command_starts_a_private_local_streamlit_server(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: list[list[str]] = []
@@ -212,6 +212,8 @@ def test_the_app_command_starts_streamlit_without_usage_statistics(
     assert args[1:4] == ["-m", "streamlit", "run"]
     assert Path(args[4]).name == "main.py"
     assert "--browser.gatherUsageStats=false" in args
+    # only this computer can reach the papers; Streamlit's default listens on every network
+    assert "--server.address=localhost" in args
     assert args[-3:] == ["--", "--env-file", str(env_file)]
 
 

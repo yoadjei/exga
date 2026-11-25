@@ -34,7 +34,16 @@ standards in spec 0A.6.
   "— Not certifiable"), never colour alone. Guarantees use `exga.messages`, so the app states
   exactly what was certified, "for this field".
 - Before any request to a hosted model, the Run page states which endpoint receives the paper
-  text (spec 0A.5).
+  text, and a non-loopback endpoint needs explicit consent (spec 0A.5).
+- `exga app` starts Streamlit with `--server.address=localhost` and
+  `--browser.gatherUsageStats=false`. Streamlit's defaults listen on every network interface,
+  so anyone on the same network could open the project's papers, look up the machine's public
+  address through an outside service, and send usage statistics. Verified on 2026-11-25: with
+  the defaults the server printed a Network and an External URL; bound to localhost, a
+  connection to the LAN address was refused.
+- Text that comes from papers or the model is shown with `st.text` or in tables, and messages
+  that quote names pass through `exga.views.plain`, so a paper or file name cannot inject a
+  link or a remote image into the page.
 
 ## Known limits
 

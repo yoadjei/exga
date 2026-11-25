@@ -194,7 +194,9 @@ def open_app(
     except ConfigError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(EXIT_CONFIG) from exc
-    # no telemetry (spec 0A.5): Streamlit sends usage statistics unless told not to
+    # privacy (spec 0A.5): Streamlit sends usage statistics, listens on every network
+    # interface and looks up the machine's public address unless told otherwise; on
+    # localhost only this computer reaches the papers, and no outside service is contacted
     args = [
         sys.executable,
         "-m",
@@ -202,6 +204,7 @@ def open_app(
         "run",
         str(APP_MAIN),
         "--browser.gatherUsageStats=false",
+        "--server.address=localhost",
     ]
     if env_file is not None:
         args += ["--", "--env-file", str(env_file)]
