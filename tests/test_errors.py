@@ -1,6 +1,7 @@
 import pytest
 
 from exga.errors import (
+    BudgetExceededError,
     ConfigError,
     ExgaError,
     InsufficientCalibrationError,
@@ -11,7 +12,13 @@ from exga.errors import (
 
 @pytest.mark.parametrize(
     "error_type",
-    [ConfigError, PdfParseError, LLMResponseError, InsufficientCalibrationError],
+    [
+        ConfigError,
+        PdfParseError,
+        LLMResponseError,
+        BudgetExceededError,
+        InsufficientCalibrationError,
+    ],
 )
 def test_callers_can_catch_every_specific_error_through_the_base_class(
     error_type: type[ExgaError],

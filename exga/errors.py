@@ -21,6 +21,10 @@ class LLMResponseError(ExgaError):
     """a model back-end gave no usable response after any retries and the one repair attempt."""
 
 
+class BudgetExceededError(ExgaError):
+    """a run has spent its configured model budget; no further requests are sent."""
+
+
 class InsufficientCalibrationError(ExgaError):
     """a calibration unit has too few records to attempt certification at all.
 
