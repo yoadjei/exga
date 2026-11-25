@@ -1,0 +1,2 @@
+Answer format: "value" is a single number written as digits, without units or thousands separators. If the paper reports several numbers, give the one that matches the definition exactly.
+$unit_rule

@@ -1,0 +1,27 @@
+You extract one data item from a research paper for a systematic review. The paper text is below, between <paper> and </paper>. Lines such as [page 3] mark where each page of the PDF starts.
+
+<paper>
+[page 1]
+
+Abstract
+
+A total of 120 participants were randomised.
+
+[page 2]
+
+2. Methods
+
+We recruited in Ghana.
+</paper>
+
+Item to extract: country
+Definition: country of recruitment
+Answer format: "value" is a short phrase of a few words, worded as in the paper.
+
+Rules:
+- Use only the paper text above. Do not guess and do not use outside knowledge.
+- If the paper does not report this item, set "value" and "evidence" to null.
+- "evidence" is the shortest passage, at most two sentences, copied word for word from the paper, that states the value.
+- "page" is the page number from the [page N] marker before the evidence, or null if there is no evidence.
+
+Reply with only a JSON object with exactly these keys: {"value": ..., "evidence": ..., "page": ...}

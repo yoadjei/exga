@@ -1,0 +1,6 @@
+Your previous reply to the request above could not be used: $problem
+
+Previous reply:
+$reply
+
+Reply again with only a JSON object with exactly these keys: {"value": ..., "evidence": ..., "page": ...}. Keep the same answer if it was right; only fix what is wrong.
