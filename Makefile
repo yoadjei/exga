@@ -5,7 +5,7 @@ UV ?= uv
 # pure-core modules held to the 90% coverage floor (spec 0A.4); extended as each one lands
 CORE_MODULES = exga/matching.py,exga/calibrate.py,exga/simulation.py,exga/document.py,exga/score.py,exga/decide.py,exga/labels.py,exga/messages.py,exga/splits.py,exga/audit.py,exga/views.py,exga/evaluate.py
 
-.PHONY: setup lint format type test verify-guarantee bench app experiments install-check
+.PHONY: setup lint format type test verify-guarantee bench app experiments install-check thesis
 
 # create .venv with the exact versions pinned in uv.lock, including dev tools
 setup:
@@ -58,3 +58,8 @@ experiments:
 	$(UV) run python experiments/run.py evaluate experiments/ablations.yaml
 	$(UV) run python experiments/run.py extract experiments/annotated.yaml
 	$(UV) run python experiments/run.py evaluate experiments/annotated.yaml
+
+# the thesis tables (LaTeX and CSV) and figures (PDF and PNG) under results/thesis/, from
+# every result that exists; missing ones are named, never filled in (ADR 0013)
+thesis:
+	$(UV) run python experiments/thesis.py

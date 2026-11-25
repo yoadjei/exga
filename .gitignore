@@ -44,3 +44,6 @@ study/data/
 study/papers/
 study/projects/
 results/study/
+
+# thesis tables and figures, rebuilt by make thesis (ADR 0013)
+results/thesis/
