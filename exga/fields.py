@@ -51,8 +51,12 @@ def load_fields(path: Path) -> tuple[FieldSpec, ...]:
     return tuple(specs)
 
 
-def save_fields(specs: Sequence[FieldSpec], path: Path) -> None:
-    """write specs to path in the format `load_fields` reads, leaving out default values."""
+def fields_to_yaml(specs: Sequence[FieldSpec]) -> str:
+    """specs as the YAML text `load_fields` reads, leaving out default values."""
     entries = [spec.model_dump(mode="json", exclude_defaults=True) for spec in specs]
-    text = yaml.safe_dump({"fields": entries}, sort_keys=False, allow_unicode=True)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    return yaml.safe_dump({"fields": entries}, sort_keys=False, allow_unicode=True)
+
+
+def save_fields(specs: Sequence[FieldSpec], path: Path) -> None:
+    """write specs to path as `fields_to_yaml` text."""
+    path.write_text(fields_to_yaml(specs), encoding="utf-8", newline="\n")

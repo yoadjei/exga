@@ -5,6 +5,7 @@ could run as a formula is prefixed with an apostrophe (CSV injection).
 """
 
 import csv
+import io
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -46,12 +47,19 @@ def export_rows(
     ]
 
 
+def csv_bytes(rows: Sequence[Mapping[str, str]]) -> bytes:
+    """rows as a CSV file with a header, in UTF-8 with a byte-order mark so spreadsheets read
+    accents."""
+    buffer = io.StringIO(newline="")
+    writer = csv.DictWriter(buffer, fieldnames=COLUMNS, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue().encode("utf-8-sig")
+
+
 def write_csv(rows: Sequence[Mapping[str, str]], path: Path) -> None:
-    """write rows with a header, UTF-8 with a byte-order mark so spreadsheets read accents."""
-    with path.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=COLUMNS, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
+    """write rows to path as `csv_bytes`."""
+    path.write_bytes(csv_bytes(rows))
 
 
 def _checked_cell(checked: Mapping[tuple[str, str], str | None], key: tuple[str, str]) -> str:

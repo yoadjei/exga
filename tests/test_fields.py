@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from exga.errors import ConfigError
-from exga.fields import load_fields, save_fields
+from exga.fields import fields_to_yaml, load_fields, save_fields
 from exga.schemas import FieldSpec
 
 VALID = """\
@@ -81,3 +81,13 @@ def test_the_example_field_list_is_valid() -> None:
 
     assert {spec.group for spec in specs} == {"numeric", "categorical", "short_text", "long_text"}
     assert all(isinstance(spec, FieldSpec) for spec in specs)
+
+
+def test_the_yaml_text_is_what_save_fields_writes(tmp_path: Path) -> None:
+    specs = [FieldSpec(name="sample_size", description="participants", group="numeric")]
+    save_fields(specs, tmp_path / "fields.yaml")
+
+    text = fields_to_yaml(specs)
+
+    assert text == (tmp_path / "fields.yaml").read_text(encoding="utf-8")
+    assert text.startswith("fields:\n- name: sample_size\n")

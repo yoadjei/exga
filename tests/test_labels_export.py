@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from exga.errors import ConfigError
-from exga.export import COLUMNS, export_rows, write_csv
+from exga.export import COLUMNS, csv_bytes, export_rows, write_csv
 from exga.labels import calibration_records, gold_value, is_wrong
 from exga.schemas import Extraction, FieldSpec, Signals, SpanLocation
 from exga.settings import MatchingSettings
@@ -158,3 +158,13 @@ def test_the_csv_has_a_header_and_reads_back(tmp_path: Path) -> None:
         reader = csv.DictReader(handle)
         assert tuple(reader.fieldnames or ()) == COLUMNS
         assert [row["value"] for row in reader] == ["Côte d'Ivoire"]
+
+
+def test_csv_bytes_are_the_file_write_csv_writes(tmp_path: Path) -> None:
+    rows = export_rows([extraction(field="country", value="Côte d'Ivoire")], {})
+    write_csv(rows, tmp_path / "results.csv")
+
+    data = csv_bytes(rows)
+
+    assert data == (tmp_path / "results.csv").read_bytes()
+    assert data.startswith(b"\xef\xbb\xbfpaper,field,value")
