@@ -20,6 +20,18 @@ handle it. Nothing below is implemented yet unless it says so.
   independent. That holds when each paper contributes at most one item per field. Pooling
   several fields from the same paper breaks it (one badly parsed PDF causes several errors at
   once), so pooled results must be labelled as assuming independence (spec 5.4).
+- **A threshold log is repeated testing.** Every completed audit batch recomputes the
+  thresholds (spec 5.6). Each version, at the time it is computed, is violated with
+  probability at most δ. Over a log of many versions, the chance that some version was
+  violated at some point is higher. In `results/audit_simulation.csv` (10 versions, δ = 0.1),
+  random audits keep each version's violation rate at 0.000–0.034, but 10–13% of logs contain
+  a violated version. exga's claims are therefore about the current threshold only. A bound
+  that holds over the whole log at once would need an anytime-valid method, such as a
+  confidence sequence. That is out of scope (ADR 0009).
+- **Records must not depend on labels.** If wrong values are logged half as often as right
+  ones, the share of violated versions rises to 0.21–0.46 in the same simulation. Only items
+  drawn by `exga`'s random audit enter calibration (ADR 0009). The database cannot detect a
+  person who labels carelessly.
 
 ## Correctness rules (labels)
 

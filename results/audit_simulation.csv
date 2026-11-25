@@ -1,0 +1,11 @@
+population,policy,alpha,delta,rounds,items_per_round,repetitions,seed,certified_versions,version_violation_rate,ever_violated_rate
+power_beta_4_1_g1,random audit,0.1,0.1,10,400,1000,2037,4600,0.0272,0.12
+power_beta_4_1_g1,wrong logged at 0.5,0.1,0.1,10,400,1000,2032,6085,0.2391,0.593
+power_beta_8_1_g3,random audit,0.1,0.1,10,400,1000,2137,3021,0.022,0.107
+power_beta_8_1_g3,wrong logged at 0.5,0.1,0.1,10,400,1000,2132,4997,0.205,0.534
+discrete_ties,random audit,0.1,0.1,10,400,1000,2237,5757,0.034,0.125
+discrete_ties,wrong logged at 0.5,0.1,0.1,10,400,1000,2232,7677,0.4561,0.829
+non_monotone_mid_band,random audit,0.1,0.1,10,400,1000,2337,4743,0.0207,0.099
+non_monotone_mid_band,wrong logged at 0.5,0.1,0.1,10,400,1000,2332,6415,0.0548,0.263
+non_monotone_top_band,random audit,0.1,0.1,10,400,1000,2437,2503,0.0,0.0
+non_monotone_top_band,wrong logged at 0.5,0.1,0.1,10,400,1000,2432,4798,0.0,0.0

@@ -12,7 +12,9 @@ from typing import Protocol
 import numpy as np
 from scipy import integrate, special, stats
 
+from exga.audit import audit_size
 from exga.calibrate import BoolArray, FloatArray, fit_threshold
+from exga.settings import AuditSettings
 
 
 class Population(Protocol):
@@ -199,3 +201,88 @@ def simulate_guarantee(
             certified += 1
             violations += population.selective_error(result.lambda_hat) > alpha
     return SimulationSummary(repetitions=repetitions, certified=certified, violations=violations)
+
+
+@dataclass(frozen=True)
+class AuditSimulationSummary:
+    """outcomes of repeated audit loops: one threshold version per completed round."""
+
+    repetitions: int
+    versions: int
+    """threshold versions computed in all repetitions."""
+    certified_versions: int
+    violated_versions: int
+    """certified versions whose true selective error exceeds alpha."""
+    repetitions_ever_violated: int
+    """repetitions in which at least one version was violated."""
+
+    @property
+    def version_violation_rate(self) -> float:
+        """P(a given version is violated): the guarantee bounds this by delta."""
+        return self.violated_versions / self.versions
+
+    @property
+    def ever_violated_rate(self) -> float:
+        """P(some version in the log is violated): repeated testing, not bounded by delta."""
+        return self.repetitions_ever_violated / self.repetitions
+
+
+def simulate_audit_loop(
+    population: Population,
+    *,
+    rounds: int,
+    items_per_round: int,
+    audit_settings: AuditSettings,
+    repetitions: int,
+    alpha: float,
+    delta: float,
+    grid: FloatArray,
+    min_accepted: int,
+    rng: np.random.Generator,
+    keep_wrong: float = 1.0,
+) -> AuditSimulationSummary:
+    """run the audit-and-recalibrate loop of spec 5.6 many times on synthetic items.
+
+    each round brings items_per_round new items, draws an audit batch from them with
+    `audit_size`, adds the batch's labels to the records and recalibrates, logging a new
+    threshold version. keep_wrong < 1 makes logging depend on the label: a wrong value is
+    recorded only with that probability, as when people fix errors in the table but log
+    the values they confirm (ADR 0009).
+    """
+    batch = audit_size(items_per_round, audit_settings)
+    certified = violated = ever = 0
+    for _ in range(repetitions):
+        scores = np.empty(0)
+        wrong = np.empty(0, dtype=bool)
+        violated_here = False
+        for _ in range(rounds):
+            new_scores, new_wrong = population.sample(rng, items_per_round)
+            drawn = rng.choice(items_per_round, size=batch, replace=False)
+            batch_scores, batch_wrong = new_scores[drawn], new_wrong[drawn]
+            if keep_wrong < 1.0:
+                logged = ~batch_wrong | (rng.random(batch) < keep_wrong)
+                batch_scores, batch_wrong = batch_scores[logged], batch_wrong[logged]
+            scores = np.concatenate([scores, batch_scores])
+            wrong = np.concatenate([wrong, batch_wrong])
+            result = fit_threshold(
+                scores,
+                wrong,
+                grid=grid,
+                alpha=alpha,
+                delta=delta,
+                min_accepted=min_accepted,
+                group="audit",
+            )
+            if result.lambda_hat is not None:
+                certified += 1
+                bad = population.selective_error(result.lambda_hat) > alpha
+                violated += bad
+                violated_here = violated_here or bad
+        ever += violated_here
+    return AuditSimulationSummary(
+        repetitions=repetitions,
+        versions=repetitions * rounds,
+        certified_versions=certified,
+        violated_versions=violated,
+        repetitions_ever_violated=ever,
+    )

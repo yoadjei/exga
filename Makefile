@@ -33,6 +33,7 @@ test:
 # full 1,000-repetition guarantee simulation; writes results/guarantee_simulation.csv
 verify-guarantee:
 	$(UV) run python scripts/verify_guarantee.py
+	$(UV) run python scripts/verify_audit.py
 
 # core-path timing against the budget in spec 0A.5
 bench:
