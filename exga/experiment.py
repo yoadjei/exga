@@ -76,7 +76,7 @@ from exga.settings import (
     SplitSettings,
 )
 from exga.splits import PaperSplit, split_papers
-from exga.tables import Row, write_rows
+from exga.tables import Row, read_rows, write_rows
 
 DEFAULT_VARIANTS = {
     "agreement": ScoreSettings(logprob_weight=0.0, source_weight=0.0),
@@ -595,3 +595,17 @@ def _mean(values: Sequence[float | None]) -> float | None:
 def write_tables(tables: Tables, folder: Path) -> list[Path]:
     """write each table as <name>.csv in folder (see `exga.tables.write_rows`)."""
     return [write_rows(rows, folder / f"{name}.csv") for name, rows in asdict(tables).items()]
+
+
+def read_tables(folder: Path) -> Tables:
+    """the tables `write_tables` wrote to folder, as text with empty cells as None.
+
+    raises ConfigError when one of them is missing.
+    """
+    tables: dict[str, list[Row]] = {}
+    for name in asdict(Tables()):
+        path = folder / f"{name}.csv"
+        if not path.is_file():
+            raise ConfigError(f"{path} not found; run experiments/run.py evaluate first")
+        tables[name] = read_rows(path)
+    return Tables(**tables)

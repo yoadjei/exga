@@ -27,6 +27,7 @@ from exga.experiment import (
     load_config,
     load_items,
     load_samples,
+    read_tables,
     write_tables,
 )
 from exga.llm.mock import MockCall, MockLLMClient
@@ -357,3 +358,18 @@ def test_every_committed_config_is_valid(path: Path) -> None:
     loaded = load_config(path)
 
     assert loaded.name == path.stem
+
+
+def test_tables_read_back_as_text(tmp_path: Path) -> None:
+    tables = Tables(by_group=[{"model": "m", "alpha": 0.1, "certified": True, "error_low": None}])
+    write_tables(tables, tmp_path)
+
+    back = read_tables(tmp_path)
+
+    assert back.by_group == [{"model": "m", "alpha": "0.1", "certified": "true", "error_low": None}]
+    assert (back.by_field, back.baselines, back.updating) == ([], [], [])
+
+
+def test_reading_tables_that_were_never_written_says_how_to_make_them(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"experiments/run\.py evaluate"):
+        read_tables(tmp_path)
