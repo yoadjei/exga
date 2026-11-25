@@ -58,12 +58,14 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # tests document themselves through their names, and literal expected values are the point of a test
 "tests/**" = ["D", "PLR2004"]
+# scripts are command-line programs: printing is their user output
+"scripts/**" = ["T20"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
 warn_unreachable = true
-files = ["exga", "tests"]
+files = ["exga", "tests", "scripts"]
 plugins = ["pydantic.mypy"]
 
 [tool.pydantic-mypy]
