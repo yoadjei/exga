@@ -3,9 +3,9 @@
 ## Current state
 
 - **Last updated:** 2026-11-25
-- **Phase:** P0–P9 built. P3's real-PDF check, P5's annotated set, P7's walk-through, P8's
-  real run and P9's sessions wait for the owner (see "Owner actions"). P10 (packaging and
-  docs) next.
+- **Phase:** P0–P10 built; release `v0.1.0` tagged. P3's real-PDF check, P5's annotated
+  set, P7's walk-through, P8's real run and P9's sessions wait for the owner (see "Owner
+  actions"). P11 (thesis support) next.
 - **Repository:** https://github.com/yoadjei/exga. Each phase is built on a branch, pushed, and
   fast-forwarded into `main` once GitHub CI is green. A local hook blocks edits on `main`.
 - **Decision authority:** on 2026-11-25 the owner delegated all remaining decisions to the lead
@@ -25,12 +25,12 @@
 | P7 Web app | owner completes upload → review → audit → export | **built; walk-through waits for the owner and a model endpoint** | `tests/test_app.py` drives every page with AppTest (24 tests, upload through export); a real-browser pass on a running server checked rendering, the highlighted PDF page and the privacy settings |
 | P8 Experiments | tables and figures from configs | **built; the real run waits for model endpoints** | `tests/test_experiments_run.py` runs `experiments/run.py` end to end on a mock model and a benchmark in the downloaded layout: all four tables, three figures (rendered and inspected), the records file and the manifest; `tests/test_evaluate.py`, `tests/test_experiment.py` (including the annotated set as a second dataset). No results exist yet, and none are made up |
 | P9 User study | data collected and summarised | **materials and analysis built; sessions wait for ethics approval and participants** | protocol, consent form, task sheet and questionnaire in `study/` (ADR 0012); `study/study.py` prepares counterbalanced forms, removes the study papers from the calibration records and summarises the data. `tests/test_study_run.py` runs it end to end on invented participants; no study data exist |
-| P10 Packaging and docs | clean `pip install`; app runs from README | | |
+| P10 Packaging and docs | clean `pip install`; app runs from README | **done** | `make install-check` (also a CI job on Linux) installs the wheel into a fresh environment with an empty home folder and checks the package files, `exga --help`, the first page and the app's health endpoint. The README steps were followed literally in a fresh folder with Python 3.14: `pip install` from GitHub, `.env`, `exga app --env-file .env` served on localhost and its first page rendered. README, user guide, docs index, limitations, `CITATION.cff` |
 | P11 Thesis support | owner sign-off | | |
 
 ## Test status
 
-683 tests pass in about 60 s. The pure core (`matching`, `calibrate`, `simulation`, `document`,
+684 tests pass in about 70 s. The pure core (`matching`, `calibrate`, `simulation`, `document`,
 `score`, `decide`, `labels`, `messages`, `splits`, `audit`, `views`, `evaluate`) has 97–100%
 line and branch coverage, gated at 90% in `make test`; the whole package, app pages included,
 is at 96%, and the study analysis (`exga/study.py`) at 100%. ruff and mypy (strict, also
@@ -104,6 +104,10 @@ Smaller choices are explained in commit messages.
     found right leaves no trace in the export, so `checked_value` shows only what was
     changed. Random audits do record every answer. The user study therefore counts
     corrections (ADR 0012).
+14. **A first start of Streamlit asks for an email address** in the terminal, and waits.
+    The development machine had answered it in 2025, so only the clean-install check of P10
+    showed it. `exga app` now turns the prompt off, and the check fails if it comes back
+    (ADR 0010).
 
 ## Owner actions
 
@@ -140,6 +144,6 @@ Smaller choices are explained in commit messages.
 
 ## Next step
 
-P10: README and user guide written from a clean install, the packaging check (prompts,
-migrations and `exga/app` inside the wheel; `pip install` in a fresh environment), the
-licence and `CITATION.cff`.
+P11: thesis support. Scripts that turn the experiment and study results into the tables and
+figures of thesis chapter 4, and a methods text for chapter 3 that points to `docs/method.md`
+and the ADRs. Sign-off is the owner's.
