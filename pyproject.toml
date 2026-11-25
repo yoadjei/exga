@@ -13,9 +13,14 @@ dependencies = [
     "pydantic>=2.14.4",
     "pydantic-settings>=2.16.3",
     "pymupdf>=1.28.2,<2",
+    "pyyaml>=6.0.2",
     "rapidfuzz>=3.14.6",
     "scipy>=1.17.1",
+    "typer>=0.15",
 ]
+
+[project.scripts]
+exga = "exga.cli:app"
 
 [build-system]
 requires = ["hatchling>=1.27"]
@@ -29,6 +34,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
     "scipy-stubs>=1.17.1.5",
+    "types-pyyaml>=6.0",
 ]
 
 [tool.ruff]
