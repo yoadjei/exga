@@ -216,6 +216,8 @@ def test_the_app_command_starts_a_private_local_streamlit_server(
     assert "--server.address=localhost" in args
     # no Deploy button inviting people to publish the app, papers included, to a cloud
     assert "--client.toolbarMode=minimal" in args
+    # on a computer that never ran Streamlit, no prompt asking for the user's email address
+    assert "--server.showEmailPrompt=false" in args
     # a neutral accent, so "Accepted" filter chips are not red
     assert "--theme.primaryColor=#2563eb" in args
     assert args[-3:] == ["--", "--env-file", str(env_file)]

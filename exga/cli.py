@@ -207,6 +207,8 @@ def open_app(
         "--server.address=localhost",
         # no Deploy button, which invites publishing the app, papers included, to a cloud
         "--client.toolbarMode=minimal",
+        # on a computer that never ran Streamlit, it would stop and ask for an email address
+        "--server.showEmailPrompt=false",
         # a neutral accent (white text on it: 5.2:1), so "Accepted" filter chips are not red
         "--theme.primaryColor=#2563eb",
     ]

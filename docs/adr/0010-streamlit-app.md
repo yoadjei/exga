@@ -46,6 +46,10 @@ standards in spec 0A.6.
   (`--theme.primaryColor=#2563eb`) so selected "Accepted" chips are not red. A custom accent
   puts Streamlit in its light theme, which the status colours (dark text on light
   backgrounds) were designed for. A real-browser pass on 2026-11-25 confirmed all three.
+- On a computer that has never run Streamlit, its first start stops at a terminal prompt
+  asking for an email address. The development machine had answered it in 2025, which hid
+  the prompt until the clean-install check of P10 looked for it. `exga app` passes
+  `--server.showEmailPrompt=false`.
 - Text that comes from papers or the model is shown with `st.text` or in tables, and messages
   that quote names pass through `exga.views.plain`, so a paper or file name cannot inject a
   link or a remote image into the page.
