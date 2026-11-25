@@ -16,7 +16,8 @@ import numpy.typing as npt
 
 from exga.calibrate import calibrate_fields
 from exga.schemas import CalibrationRecord, FieldGroup, FieldSpec, Signals, ThresholdResult
-from exga.settings import CalibrationSettings
+from exga.score import combine
+from exga.settings import CalibrationSettings, ScoreSettings
 from exga.splits import PaperSplit
 
 Metric = Literal["raw_accuracy", "acceptance_rate", "realised_error", "coverage"]
@@ -50,6 +51,16 @@ class LabelledItem:
     group: FieldGroup
     signals: Signals
     wrong: bool
+    failed: bool = False
+    """the model gave no usable answer; such items score 0 under every score (ADR 0007)."""
+
+
+def variant_scores(items: Sequence[LabelledItem], weights: ScoreSettings) -> FloatArray:
+    """each item's score under one weighting of its stored signals (the ablation, ADR 0011)."""
+    return np.array(
+        [0.0 if item.failed else combine(item.signals, weights) for item in items],
+        dtype=np.float64,
+    )
 
 
 @dataclass(frozen=True)

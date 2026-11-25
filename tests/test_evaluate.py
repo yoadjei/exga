@@ -11,9 +11,10 @@ from exga.evaluate import (
     outcome,
     run_split,
     updating_curve,
+    variant_scores,
 )
 from exga.schemas import FieldSpec, Signals
-from exga.settings import CalibrationSettings
+from exga.settings import CalibrationSettings, ScoreSettings
 from exga.splits import PaperSplit
 
 SETTINGS = CalibrationSettings(alpha=0.2, delta=0.1)
@@ -166,3 +167,17 @@ def test_the_updating_curve_adds_one_audit_batch_at_a_time() -> None:
     error = curve[-1].outcome.realised_error
     assert error is not None
     assert error <= SETTINGS.alpha
+
+
+def test_variant_scores_reweight_the_stored_signals_and_keep_failures_at_zero() -> None:
+    signals = Signals(agreement=0.6, logprob=0.9, source_match=1.0)
+    items = [
+        LabelledItem("a" * 64, "sample_size", "numeric", signals, wrong=False),
+        LabelledItem("b" * 64, "sample_size", "numeric", signals, wrong=True, failed=True),
+    ]
+
+    agreement_only = variant_scores(items, ScoreSettings(logprob_weight=0, source_weight=0))
+    combined = variant_scores(items, ScoreSettings())
+
+    assert agreement_only.tolist() == pytest.approx([0.6, 0.0])
+    assert combined.tolist() == pytest.approx([(0.6 + 0.9 + 1.0) / 3, 0.0])
