@@ -14,8 +14,8 @@ handle it. Nothing below is implemented yet unless it says so.
   on its own. With F independent fields at δ = 0.1, the chance that at least one field's bound
   fails can reach 1 − 0.9^F (0.57 for F = 8). Claims shown to users must therefore say "per
   field". A simultaneous bound over 8 fields would roughly double the calibration data each
-  field needs (zero-error case at α = 0.10: 42 accepted items instead of 22). See ADR 0001;
-  the choice is open for the owner (`docs/PROGRESS.md`).
+  field needs (zero-error case at α = 0.10: 42 accepted items instead of 22). ADR 0001 keeps
+  the bound per field, and every guarantee message says "for this field" (`exga/messages.py`).
 - **Independence within a field.** The binomial test assumes calibration items are
   independent. That holds when each paper contributes at most one item per field. Pooling
   several fields from the same paper breaks it (one badly parsed PDF causes several errors at

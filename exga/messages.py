@@ -35,14 +35,15 @@ def status(decision: Decision) -> str:
 def guarantee(result: ThresholdResult) -> str:
     """one line stating what is promised for a field, or that nothing is.
 
-    e.g. "Error ≤ 5% (90% confidence) · 412 checked values". a pooled result names its
+    e.g. "Error ≤ 5% for this field (90% confidence) · 412 checked values"; the bound is
+    per field (ADR 0001), so the line says so. a pooled result names its
     group and the independence assumption (spec 5.4).
     """
     confidence = percent(1 - result.delta)
     checked = _count(result.n_cal, "checked value")
     if not result.certified:
-        return f"Not certifiable at error ≤ {percent(result.alpha)} · {checked}"
-    line = f"Error ≤ {percent(result.alpha)} ({confidence} confidence) · {checked}"
+        return f"Not certifiable at error ≤ {percent(result.alpha)} for this field · {checked}"
+    line = f"Error ≤ {percent(result.alpha)} for this field ({confidence} confidence) · {checked}"
     if result.pooled:
         line += " · " + POOLED_NOTE.format(group=result.group.replace("_", " "))
     return line

@@ -103,7 +103,9 @@ def test_status_pairs_a_symbol_with_a_label() -> None:
 
 
 def test_the_guarantee_line_states_bound_confidence_and_evidence() -> None:
-    assert guarantee(certified(0.8)) == "Error ≤ 5% (90% confidence) · 412 checked values"
+    assert guarantee(certified(0.8)) == (
+        "Error ≤ 5% for this field (90% confidence) · 412 checked values"
+    )
 
 
 def test_a_pooled_guarantee_names_its_group_and_assumption() -> None:
@@ -115,7 +117,9 @@ def test_a_pooled_guarantee_names_its_group_and_assumption() -> None:
 
 
 def test_an_uncertified_field_promises_nothing() -> None:
-    assert guarantee(uncertified()) == "Not certifiable at error ≤ 10% · 40 checked values"
+    assert guarantee(uncertified()) == (
+        "Not certifiable at error ≤ 10% for this field · 40 checked values"
+    )
 
 
 def test_the_warning_reports_the_raw_error_rate() -> None:
