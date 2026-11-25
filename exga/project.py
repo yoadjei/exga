@@ -23,6 +23,7 @@ from exga.labels import calibration_records
 from exga.llm.base import LLMClient
 from exga.llm.cache import CachedLLMClient
 from exga.papers import PDF_SUFFIXES, TEXT_SUFFIXES, Skipped, load_document
+from exga.records import load_records
 from exga.schemas import CalibrationRecord, Document, Extraction, FieldSpec, ThresholdResult
 from exga.score import score_item
 from exga.settings import DocumentSettings, Settings
@@ -198,6 +199,16 @@ def import_gold_file(
         created_at=at,
     )
     return import_records(project.store, records, settings, at)
+
+
+def import_record_file(
+    project: Project, path: Path, settings: Settings, at: datetime
+) -> ThresholdVersion:
+    """import a records file (e.g. benchmark records from an experiment), then recalibrate.
+
+    raises ConfigError for a malformed file or one holding random-audit records.
+    """
+    return import_records(project.store, load_records(path), settings, at)
 
 
 def current_thresholds(store: ProjectStore) -> dict[str, ThresholdResult]:

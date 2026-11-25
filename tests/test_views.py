@@ -121,7 +121,12 @@ def test_field_status_rows_give_counts_bounds_and_the_guarantee() -> None:
         "country": result("short_text", certified=True, pooled=True),
         "design": result("design", certified=False),
     }
-    history = records("sample_size", "numeric", audits=4, others=56)
+    # audits of a field outside the project never count, even in its group's pooled unit
+    history = [
+        *records("sample_size", "numeric", audits=4, others=56),
+        *records("country", "short_text", audits=1, others=0),
+        *records("city", "short_text", audits=2, others=0),
+    ]
 
     rows = field_status_rows([SAMPLE_SIZE, COUNTRY, DESIGN], thresholds, history)
 
@@ -135,7 +140,7 @@ def test_field_status_rows_give_counts_bounds_and_the_guarantee() -> None:
         "Upper bound": "9.4%",
         "Guarantee": "Error ≤ 10% for this field (90% confidence) · 60 checked values",
     }
-    assert rows[1]["Status"] == "✓ Certified (pooled)"
+    assert (rows[1]["Status"], rows[1]["From audits"]) == ("✓ Certified (pooled)", 1)
     assert str(rows[1]["Guarantee"]).endswith("(assumes errors are independent across fields)")
     assert (rows[2]["Status"], rows[2]["Threshold"], rows[2]["Upper bound"]) == (
         "— Not certifiable",

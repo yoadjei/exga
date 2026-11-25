@@ -84,11 +84,13 @@ def field_status_rows(
                 }
             )
             continue
-        unit = [
-            record
-            for record in records
-            if (record.group == result.group if result.pooled else record.field == spec.name)
-        ]
+        # a pooled result covers the project's fields of this group, as in calibrate_fields
+        names = (
+            {other.name for other in specs if other.group == spec.group}
+            if result.pooled
+            else {spec.name}
+        )
+        unit = [record for record in records if record.field in names]
         rows.append(
             {
                 "Field": spec.name,

@@ -14,11 +14,13 @@ from exga.project import (
     add_paper_file,
     create_project,
     import_gold_file,
+    import_record_file,
     open_project,
     project_documents,
     run_extraction,
 )
-from exga.schemas import FieldSpec, RawResponse
+from exga.records import save_records
+from exga.schemas import CalibrationRecord, FieldSpec, RawResponse
 from exga.settings import ExtractionSettings, Settings
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -166,3 +168,34 @@ def test_gold_values_become_annotation_records(tmp_path: Path) -> None:
     [record] = project.store.records()
     assert (record.source, record.wrong) == ("annotation", True)
     assert version.n_records == 1
+
+
+def benchmark_record(index: int, source: str = "benchmark") -> CalibrationRecord:
+    return CalibrationRecord(
+        paper_id=f"{index:064x}",
+        field="sample_size",
+        group="numeric",
+        score=0.9,
+        wrong=False,
+        source=source,  # type: ignore[arg-type]
+        created_at=NOW,
+    )
+
+
+def test_a_records_file_is_imported_and_recalibrates(tmp_path: Path) -> None:
+    project = create_project(tmp_path / "review", [SAMPLE_SIZE])
+    save_records([benchmark_record(i) for i in range(30)], tmp_path / "records.jsonl")
+
+    version = import_record_file(project, tmp_path / "records.jsonl", SETTINGS, NOW)
+
+    assert version.n_records == 30
+    assert len(project.store.records()) == 30
+
+
+def test_a_records_file_cannot_smuggle_in_audit_records(tmp_path: Path) -> None:
+    project = create_project(tmp_path / "review", [SAMPLE_SIZE])
+    save_records([benchmark_record(1, source="random_audit")], tmp_path / "records.jsonl")
+
+    with pytest.raises(ConfigError, match="only from completed audit batches"):
+        import_record_file(project, tmp_path / "records.jsonl", SETTINGS, NOW)
+    assert project.store.records() == []
