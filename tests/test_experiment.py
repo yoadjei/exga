@@ -266,3 +266,11 @@ def test_tables_are_written_as_csv_files(tmp_path: Path) -> None:
         encoding="utf-8"
     ) == "model,cutoff\nm,\n"
     assert (tmp_path / "tables" / "updating.csv").read_text(encoding="utf-8") == ""
+
+
+def test_paths_hash_the_same_on_every_operating_system(tmp_path: Path) -> None:
+    experiment = config(tmp_path, benchmark=Path("data") / "benchmark" / "raw")
+
+    dumped = experiment.model_dump(mode="json")
+
+    assert dumped["benchmark"] == "data/benchmark/raw"  # not data\benchmark\raw on Windows

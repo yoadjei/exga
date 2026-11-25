@@ -14,7 +14,15 @@ from typing import Self
 
 import numpy as np
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from exga.benchmark import (
     BenchmarkItem,
@@ -137,6 +145,12 @@ class ExperimentConfig(BaseModel):
         if len(names) != len(set(names)):
             raise ValueError("model names must be distinct")
         return self
+
+    @field_serializer("benchmark", "runs", "results")
+    def _posix(self, path: Path) -> str:
+        # forward slashes on every system, so a config hashes, and names its results folder,
+        # the same on Windows and Linux
+        return path.as_posix()
 
     def samples_path(self, model: ModelConfig) -> Path:
         """where a model's samples are saved."""
