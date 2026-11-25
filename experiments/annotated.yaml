@@ -1,0 +1,25 @@
+# The main questions on the owner's annotated set (spec 10.2, 11A; ADR 0011 decision 11).
+# Run once data/annotated/README.md is complete and `exga check-gold` passes. The model
+# settings follow main.yaml; see there for the key, prices and budget.
+#
+# evaluate also writes records/<model>.jsonl, which a project imports on its Calibrate page.
+name: annotated
+data:
+  kind: annotated
+  papers: data/annotated/papers
+  fields: data/annotated/fields.yaml
+  gold: data/annotated/gold.csv
+models:
+  - name: hosted
+    hosted:
+      base_url: https://api.openai.com/v1
+      # model: <same provider model id as in main.yaml>
+alphas: [0.05, 0.1, 0.2]
+delta: 0.1
+repetitions: 50
+bootstrap: 1000
+cutoff: 0.8
+audit_batch: 10
+variants:
+  combined: {}
+primary_variant: combined

@@ -38,7 +38,8 @@ SETTINGS = Settings(extraction=ExtractionSettings(samples=3, workers=2))
 DOCUMENT = SETTINGS.document
 SIZE = FieldSpec(name="intervention_group_size", description="participants", group="numeric")
 EVENTS = FieldSpec(name="intervention_events", description="events", group="numeric")
-RAW = Path(__file__).parents[1] / "data" / "benchmark" / "raw"
+REPOSITORY = Path(__file__).parents[1]
+RAW = REPOSITORY / "data" / "benchmark" / "raw"
 
 
 def synthetic_items(papers: int) -> list[GoldItem]:
@@ -349,3 +350,10 @@ def test_records_carry_the_deployed_score_and_label_of_every_item(
         (item.paper_id, item.field, item.group, item.wrong) for item in labelled
     ]
     assert {(record.source, record.created_at) for record in records} == {("benchmark", at)}
+
+
+@pytest.mark.parametrize("path", sorted((REPOSITORY / "experiments").glob("*.yaml")), ids=str)
+def test_every_committed_config_is_valid(path: Path) -> None:
+    loaded = load_config(path)
+
+    assert loaded.name == path.stem

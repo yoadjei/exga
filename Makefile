@@ -51,3 +51,5 @@ experiments:
 	$(UV) run python experiments/run.py evaluate experiments/main.yaml
 	$(UV) run python experiments/run.py extract experiments/ablations.yaml
 	$(UV) run python experiments/run.py evaluate experiments/ablations.yaml
+	$(UV) run python experiments/run.py extract experiments/annotated.yaml
+	$(UV) run python experiments/run.py evaluate experiments/annotated.yaml

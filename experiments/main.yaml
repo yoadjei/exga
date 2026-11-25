@@ -8,7 +8,10 @@
 #     EXGA_HOSTED__OUTPUT_PRICE_PER_MILLION and EXGA_HOSTED__BUDGET_USD.
 # Then `python experiments/run.py evaluate experiments/main.yaml` (or `make experiments`).
 name: main
-split: TEST
+data:
+  kind: benchmark
+  folder: data/benchmark/raw
+  split: TEST
 models:
   - name: hosted
     hosted:

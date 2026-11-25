@@ -2,7 +2,10 @@
 # four ways. Extraction reuses the response cache of main.yaml, so it sends no new requests
 # once main has been extracted with the same models.
 name: ablations
-split: TEST
+data:
+  kind: benchmark
+  folder: data/benchmark/raw
+  split: TEST
 models:
   - name: hosted
     hosted:
