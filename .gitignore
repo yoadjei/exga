@@ -31,3 +31,7 @@ htmlcov/
 .idea/
 .claude/settings.local.json
 tasks/
+
+# downloaded benchmark data (scripts/download_benchmark.py) and the model response cache
+data/benchmark/raw/
+.exga/

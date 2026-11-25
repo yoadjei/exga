@@ -1,0 +1,26 @@
+# Questions for the Yun et al. (2024) benchmark fields (ADR 0008). Each is a string.Template;
+# $intervention, $comparator and $outcome come from the annotated triplet.
+intervention_group_size: >-
+  number of participants in the "$intervention" group whose results for the outcome
+  "$outcome" are reported, in the comparison with "$comparator"
+comparator_group_size: >-
+  number of participants in the "$comparator" group whose results for the outcome
+  "$outcome" are reported, in the comparison with "$intervention"
+intervention_events: >-
+  number of participants in the "$intervention" group who had the outcome "$outcome",
+  in the comparison with "$comparator"
+comparator_events: >-
+  number of participants in the "$comparator" group who had the outcome "$outcome",
+  in the comparison with "$intervention"
+intervention_mean: >-
+  mean of the outcome "$outcome" in the "$intervention" group, as reported for the
+  comparison with "$comparator"
+comparator_mean: >-
+  mean of the outcome "$outcome" in the "$comparator" group, as reported for the
+  comparison with "$intervention"
+intervention_standard_deviation: >-
+  standard deviation of the outcome "$outcome" in the "$intervention" group, as reported
+  for the comparison with "$comparator"
+comparator_standard_deviation: >-
+  standard deviation of the outcome "$outcome" in the "$comparator" group, as reported
+  for the comparison with "$intervention"
