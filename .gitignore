@@ -1,0 +1,33 @@
+# python build output and tool caches
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+
+# secrets: API keys live in the environment or a local .env only
+.env
+
+# data, databases and model weights are never committed; small test fixtures are the exception
+*.pdf
+!tests/fixtures/*.pdf
+*.sqlite
+*.sqlite3
+*.db
+*.safetensors
+*.gguf
+*.pt
+
+# editor and personal session files
+.vscode/
+.idea/
+.claude/settings.local.json
+tasks/

@@ -1,0 +1,4 @@
+# keep LF line endings in the repository and the working copy on every platform,
+# so ruff, git and CI agree on file contents
+* text=auto eol=lf
+*.pdf binary
