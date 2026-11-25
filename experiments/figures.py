@@ -18,7 +18,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator, PercentFormatter
 
-from exga.experiment import ALL_FIELDS, Row, Tables
+from exga.experiment import ALL_FIELDS, Tables
+from exga.tables import Row
 
 MODEL_COLOURS = ("#2a78d6", "#eb6834", "#1baf7a")
 """categorical slots 1-3: blue, orange, aqua; validated all-pairs (CVD dE >= 9.2)."""

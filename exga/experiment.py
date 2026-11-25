@@ -5,7 +5,6 @@ evaluation reads the saved samples, so tables are regenerated from configs witho
 requests. everything here is deterministic given the config and the samples.
 """
 
-import csv
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
@@ -77,6 +76,7 @@ from exga.settings import (
     SplitSettings,
 )
 from exga.splits import PaperSplit, split_papers
+from exga.tables import Row, write_rows
 
 DEFAULT_VARIANTS = {
     "agreement": ScoreSettings(logprob_weight=0.0, source_weight=0.0),
@@ -88,7 +88,6 @@ DEFAULT_VARIANTS = {
 ANNOTATIONS_FILE = "annotated_rct_dataset.csv"
 TEXTS_FOLDER = "texts"
 ALL_FIELDS = "all"
-Row = dict[str, object]
 
 
 class ModelConfig(BaseModel):
@@ -594,28 +593,5 @@ def _mean(values: Sequence[float | None]) -> float | None:
 
 
 def write_tables(tables: Tables, folder: Path) -> list[Path]:
-    """write each table as <name>.csv in folder; an empty table gives an empty file.
-
-    numbers keep 6 significant digits, None is an empty cell and booleans are true/false.
-    """
-    folder.mkdir(parents=True, exist_ok=True)
-    paths = []
-    for name, rows in asdict(tables).items():
-        path = folder / f"{name}.csv"
-        with path.open("w", encoding="utf-8", newline="") as handle:
-            if rows:
-                writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
-                writer.writeheader()
-                writer.writerows({key: _cell(value) for key, value in row.items()} for row in rows)
-        paths.append(path)
-    return paths
-
-
-def _cell(value: object) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, float):
-        return f"{value:.6g}"
-    return str(value)
+    """write each table as <name>.csv in folder (see `exga.tables.write_rows`)."""
+    return [write_rows(rows, folder / f"{name}.csv") for name, rows in asdict(tables).items()]
