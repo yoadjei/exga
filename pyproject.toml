@@ -8,9 +8,12 @@ license-files = ["LICENSE"]
 authors = [{ name = "Yaw Osei Adjei" }]
 requires-python = ">=3.11"
 dependencies = [
+    "httpx>=0.28",
     "numpy>=2.4.6",
     "pydantic>=2.14.4",
     "pydantic-settings>=2.16.3",
+    "pymupdf>=1.28.2,<2",
+    "rapidfuzz>=3.14.6",
     "scipy>=1.17.1",
 ]
 
@@ -67,6 +70,9 @@ strict = true
 warn_unreachable = true
 files = ["exga", "tests", "scripts"]
 plugins = ["pydantic.mypy"]
+# PyMuPDF's own annotations are incomplete; only calls into it are exempt from the
+# untyped-call check, so our code around it stays fully typed
+untyped_calls_exclude = ["pymupdf"]
 
 [tool.pydantic-mypy]
 # type-check model constructor calls against the declared fields

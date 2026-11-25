@@ -61,3 +61,14 @@ pydantic plugin, pytest, pytest-cov, and hypothesis from P1.
 - pyyaml is an addition to the spec's list.
 - streamlit brings pyarrow and pandas, the largest part of the install, to library users too.
   Revisit if install time hurts on Kaggle or a laptop: move the app into an `[app]` extra.
+
+## Amendment 2026-11-25: PyMuPDF stays on the 1.x line
+
+PyMuPDF 2.0 (October 2026) made its layout-analysis and LLM-export add-ons hard
+dependencies: `pymupdf-layout`, `pymupdf4llm`, onnxruntime, networkx, protobuf, psutil,
+pyyaml and tabulate, about 60 MB on top of PyMuPDF itself. exga uses none of them: it needs
+text blocks, word boxes and page rendering, which 1.x provides with the same API and no
+dependencies.
+
+**Decided:** `pymupdf>=1.28.2,<2`. Revisit when a security fix ships only in 2.x, or when
+1.x stops building for a supported Python version.
