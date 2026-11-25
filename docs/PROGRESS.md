@@ -3,9 +3,9 @@
 ## Current state
 
 - **Last updated:** 2026-11-25
-- **Phase:** P0–P10 built; release `v0.1.0` tagged. P3's real-PDF check, P5's annotated
-  set, P7's walk-through, P8's real run and P9's sessions wait for the owner (see "Owner
-  actions"). P11 (thesis support) next.
+- **Phase:** P0–P11 built; release `v0.1.0` tagged. P3's real-PDF check, P5's annotated
+  set, P7's walk-through, P8's real run, P9's sessions and P11's sign-off wait for the owner
+  (see "Owner actions").
 - **Repository:** https://github.com/yoadjei/exga. Each phase is built on a branch, pushed, and
   fast-forwarded into `main` once GitHub CI is green. A local hook blocks edits on `main`.
 - **Decision authority:** on 2026-11-25 the owner delegated all remaining decisions to the lead
@@ -26,14 +26,15 @@
 | P8 Experiments | tables and figures from configs | **built; the real run waits for model endpoints** | `tests/test_experiments_run.py` runs `experiments/run.py` end to end on a mock model and a benchmark in the downloaded layout: all four tables, three figures (rendered and inspected), the records file and the manifest; `tests/test_evaluate.py`, `tests/test_experiment.py` (including the annotated set as a second dataset). No results exist yet, and none are made up |
 | P9 User study | data collected and summarised | **materials and analysis built; sessions wait for ethics approval and participants** | protocol, consent form, task sheet and questionnaire in `study/` (ADR 0012); `study/study.py` prepares counterbalanced forms, removes the study papers from the calibration records and summarises the data. `tests/test_study_run.py` runs it end to end on invented participants; no study data exist |
 | P10 Packaging and docs | clean `pip install`; app runs from README | **done** | `make install-check` (also a CI job on Linux) installs the wheel into a fresh environment with an empty home folder and checks the package files, `exga --help`, the first page and the app's health endpoint. The README steps were followed literally in a fresh folder with Python 3.14: `pip install` from GitHub, `.env`, `exga app --env-file .env` served on localhost and its first page rendered. README, user guide, docs index, limitations, `CITATION.cff` |
-| P11 Thesis support | owner sign-off | | |
+| P11 Thesis support | owner sign-off | **built; sign-off waits for the owner** | `make thesis` (`experiments/thesis.py`) writes LaTeX and CSV tables and PDF and PNG figures from every result that exists, and names each missing source with the command that makes it (ADR 0013). `tests/test_thesis.py` checks every table's rows and formats; `tests/test_thesis_run.py` runs the export end to end on the committed simulations and invented experiment and study results. Every table was compiled with pdflatex on A4 with 2.5 cm margins, including worst-case names, with no overfull boxes. Support text: `docs/thesis/methods.md` (chapter 3, each fact with its source) and `docs/thesis/results_guide.md` (which output answers each question of spec 11.1) |
 
 ## Test status
 
-684 tests pass in about 70 s. The pure core (`matching`, `calibrate`, `simulation`, `document`,
-`score`, `decide`, `labels`, `messages`, `splits`, `audit`, `views`, `evaluate`) has 97–100%
-line and branch coverage, gated at 90% in `make test`; the whole package, app pages included,
-is at 96%, and the study analysis (`exga/study.py`) at 100%. ruff and mypy (strict, also
+718 tests pass in about 60 s. The pure core (`matching`, `calibrate`, `simulation`, `document`,
+`score`, `decide`, `labels`, `messages`, `splits`, `audit`, `views`, `evaluate`) has 99% line
+and branch coverage, gated at 90% in `make test`; the whole package, app pages included, is at
+96%, and the study analysis and thesis tables (`exga/study.py`, `exga/thesis.py`,
+`exga/tables.py`) at 100%. ruff and mypy (strict, also
 over `experiments/` and `study/`) are clean. `make bench`: scoring, calibration and decision of 10,000 items take 168 ms, and a
 20-page PDF loads in about 66 ms (budget 1 s each). Source matching takes 0.6 ms per item for
 an exact quote and about 33 ms when it falls back to fuzzy search.
@@ -54,6 +55,7 @@ an exact quote and about 33 ms when it falls back to fuzzy search.
 | [0010](adr/0010-streamlit-app.md) | a local Streamlit app over `exga.project` and `exga.views`, shipped in `exga/app/`; served on localhost only, without usage statistics or the Deploy button |
 | [0011](adr/0011-experiment-design.md) | experiments: 50 paper-level 30/40/30 splits, bootstrap intervals over papers on the primary split, three baselines, the signal ablation as reweighting, results in hashed folders with a manifest; the annotated set as a second dataset; records files for the Calibrate page |
 | [0012](adr/0012-user-study-design.md) | user study: two sets of 3 annotated papers, counterbalanced in blocks of four, participant time only, calibration without the study papers, 25-minute limit, SUS and trust items after the tool task, descriptive reporting |
+| [0013](adr/0013-thesis-outputs.md) | thesis outputs: one command from result files only, nothing filled in; LaTeX and CSV tables, PDF and PNG figures; rates in percent with the unit in the header, α as 0.05; every table fits a portrait page (one results table per model); `results/thesis/` not committed; support text, not thesis text |
 
 Smaller choices are explained in commit messages.
 
@@ -108,6 +110,11 @@ Smaller choices are explained in commit messages.
     The development machine had answered it in 2025, so only the clean-install check of P10
     showed it. `exga app` now turns the prompt off, and the check fails if it comes back
     (ADR 0010).
+15. **The main results table is one table per model.** With a model column, the 10-column
+    table in spec 11.2 ran past the text width of an A4 page once it was compiled. Models
+    are compared across two tables and in the acceptance-vs-α figure. Following spec 11.2,
+    the table gives an interval for the error only; acceptance intervals stay in each
+    experiment's `by_group.csv` (ADR 0013).
 
 ## Owner actions
 
@@ -135,6 +142,11 @@ Smaller choices are explained in commit messages.
    `study/README.md`: choose two sets of three annotated papers, prepare the calibration
    records and one clean project per set, run a pilot, and hold the sessions. Then run
    `python study/study.py analyse`.
+6. **P11 sign-off.** Run `make thesis` and look at `results/thesis/`. Read
+   `docs/thesis/methods.md` and `docs/thesis/results_guide.md` against your department's
+   thesis template and rules, including those on AI-assisted writing. Both are reference
+   material; the chapters should be in your own words. Sign off, or list what to change.
+   After actions 4 and 5, run `make experiments` and `make thesis` again to fill chapter 4.
 
 ## Known issues (environment)
 
@@ -144,6 +156,7 @@ Smaller choices are explained in commit messages.
 
 ## Next step
 
-P11: thesis support. Scripts that turn the experiment and study results into the tables and
-figures of thesis chapter 4, and a methods text for chapter 3 that points to `docs/method.md`
-and the ADRs. Sign-off is the owner's.
+Every phase is built. What remains needs the owner: a model endpoint and budget (actions 1,
+3, 4), the annotated set (action 2), ethics approval and participants (action 5), and the P11
+sign-off (action 6). Once the real results exist, `make experiments` and then `make thesis`
+produce chapter 4's tables and figures with no further code.

@@ -17,8 +17,17 @@
   `results/` (ADR 0011). The benchmark is downloaded by `scripts/download_benchmark.py`; the
   annotated set is built as described in [data/annotated/README.md](../data/annotated/README.md).
 - **User study** (spec 11.3): [study/README.md](../study/README.md) and ADR 0012.
+- **Thesis tables and figures:** `make thesis` writes LaTeX and CSV tables and PDF and PNG
+  figures to `results/thesis/` from every result that exists, and names what is missing
+  (ADR 0013).
 - **Install check:** `make install-check` installs the wheel into a clean environment and
   starts the app from it.
+
+## Thesis support
+
+- [Methods, with sources](thesis/methods.md): the facts chapter 3 needs, each with its file
+- [Results guide](thesis/results_guide.md): which table or figure answers each question of
+  spec 11.1, and the caveat to report with it
 
 ## Design and progress
 
