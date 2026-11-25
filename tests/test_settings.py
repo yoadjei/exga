@@ -85,3 +85,30 @@ def test_settings_cannot_be_changed_after_loading() -> None:
 
     with pytest.raises(ValidationError, match="frozen"):
         settings.calibration.alpha = 0.2  # type: ignore[misc]
+
+
+def test_the_api_key_is_read_from_the_environment_but_never_shown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EXGA_HOSTED__API_KEY", "sk-test-secret")
+
+    hosted = load_settings().hosted
+
+    assert hosted.api_key is not None
+    assert hosted.api_key.get_secret_value() == "sk-test-secret"
+    assert "sk-test-secret" not in repr(hosted)
+
+
+def test_a_budget_without_token_prices_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EXGA_HOSTED__BUDGET_USD", "5")
+
+    with pytest.raises(ConfigError, match="budget_usd needs"):
+        load_settings()
+
+
+def test_a_priced_budget_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EXGA_HOSTED__BUDGET_USD", "5")
+    monkeypatch.setenv("EXGA_HOSTED__INPUT_PRICE_PER_MILLION", "0.15")
+    monkeypatch.setenv("EXGA_HOSTED__OUTPUT_PRICE_PER_MILLION", "0.6")
+
+    assert load_settings().hosted.budget_usd == 5.0

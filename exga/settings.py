@@ -10,8 +10,17 @@ a settings group is added in the phase that first uses it, so nothing here is sp
 
 import math
 from pathlib import Path
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from exga.errors import ConfigError
@@ -72,6 +81,74 @@ class DocumentSettings(BaseModel):
     """page rendering scale for highlights: 1.5 gives 108 dpi, legible without large images."""
 
 
+class HostedSettings(BaseModel):
+    """an OpenAI-compatible chat-completions endpoint, hosted or local (ADR 0006)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", use_attribute_docstrings=True)
+
+    base_url: str = "https://api.openai.com/v1"
+    """endpoint root; a local vLLM or llama.cpp server is e.g. http://localhost:8000/v1."""
+
+    model: str | None = None
+    """model name sent with each request; required before the client can be built."""
+
+    api_key: SecretStr | None = None
+    """bearer token; never logged. leave unset for local servers that need none."""
+
+    timeout_seconds: float = Field(default=120.0, gt=0.0)
+    """per-request timeout; long papers make long prompts."""
+
+    max_retries: int = Field(default=5, ge=0)
+    """retries after the first attempt, for transient failures only."""
+
+    backoff_initial_seconds: float = Field(default=1.0, gt=0.0)
+    """wait before the first retry; doubles per retry, with jitter."""
+
+    backoff_max_seconds: float = Field(default=60.0, gt=0.0)
+    """cap on any single wait, including a server's Retry-After."""
+
+    requests_per_minute: float = Field(default=60.0, gt=0.0)
+    """sustained request rate shared by all worker threads."""
+
+    burst: int = Field(default=4, ge=1)
+    """requests that may start at once; matches the default worker count."""
+
+    supports_n: bool = True
+    """endpoint returns n choices per request; otherwise n requests are sent."""
+
+    logprobs: bool = True
+    """request token logprobs, needed for the logprob signal (spec 7.4)."""
+
+    structured_output: bool = True
+    """send the answer JSON schema as response_format; parsing validates either way."""
+
+    max_output_tokens: int = Field(default=512, ge=1)
+    """completion length cap; an answer is a short JSON object."""
+
+    output_tokens_param: Literal["max_tokens", "max_completion_tokens"] = "max_tokens"
+    """name of the length parameter; newer OpenAI models accept only max_completion_tokens."""
+
+    input_price_per_million: float | None = Field(default=None, ge=0.0)
+    """USD per million prompt tokens, for cost accounting."""
+
+    output_price_per_million: float | None = Field(default=None, ge=0.0)
+    """USD per million completion tokens, for cost accounting."""
+
+    budget_usd: float | None = Field(default=None, gt=0.0)
+    """stop sending requests once a run has spent this much; needs both prices."""
+
+    @model_validator(mode="after")
+    def _check_budget_is_measurable(self) -> Self:
+        priced = (
+            self.input_price_per_million is not None and self.output_price_per_million is not None
+        )
+        if self.budget_usd is not None and not priced:
+            raise ValueError(
+                "budget_usd needs input_price_per_million and output_price_per_million"
+            )
+        return self
+
+
 class Settings(BaseSettings):
     """all exga settings. build with `load_settings`, then pass explicitly."""
 
@@ -91,6 +168,9 @@ class Settings(BaseSettings):
 
     document: DocumentSettings = Field(default_factory=DocumentSettings)
     """document reading and search."""
+
+    hosted: HostedSettings = Field(default_factory=HostedSettings)
+    """the chat-completions model back-end."""
 
 
 def load_settings(env_file: Path | None = None) -> Settings:
