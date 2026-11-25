@@ -30,6 +30,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "hypothesis>=6.170.17",
+    "matplotlib>=3.9",
     "mypy>=2.4.1",
     "pandas-stubs>=3.1.0.261029",
     "pytest>=9.2.0",
