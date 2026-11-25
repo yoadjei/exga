@@ -5,6 +5,7 @@ files. commands exit with 0 on success, 2 on a configuration error and 3 when th
 budget is spent.
 """
 
+import csv
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,10 +16,13 @@ import typer
 from exga.errors import BudgetExceededError, ConfigError
 from exga.extract import extract_all, load_prompts, parse_failure_rate
 from exga.fields import load_fields
+from exga.gold import GOLD_COLUMNS, agreement, load_gold
 from exga.llm.cache import CachedLLMClient
 from exga.llm.hosted import HostedLLMClient
+from exga.messages import percent
 from exga.papers import load_folder
 from exga.settings import Settings, load_settings
+from exga.splits import double_annotation_sample
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -107,3 +111,71 @@ def _report(summary: dict[str, object], failure_rate: float | None) -> None:
     usage = summary["usage"]
     if isinstance(usage, dict) and usage.get("cost_usd") is not None:
         typer.echo(f"Cost: {usage['cost_usd']:.4f} USD.")
+
+
+@app.command("annotation-sheet")
+def annotation_sheet(
+    papers: Annotated[Path, typer.Option(help="Folder of the PDFs to annotate.")],
+    fields: Annotated[Path, typer.Option(help="Field list (YAML).")],
+    out: Annotated[Path, typer.Option(help="Folder for gold_template.csv and the plan.")],
+    seed: Annotated[int, typer.Option(help="Seed for the double-annotation sample.")] = 0,
+    env_file: Annotated[Path | None, typer.Option(help="Settings file (.env format).")] = None,
+) -> None:
+    """Write a blank gold file and the papers a second person should label (spec 10.2)."""
+    try:
+        settings = load_settings(env_file)
+        specs = load_fields(fields)
+        documents, skipped = load_folder(papers, settings.document)
+    except ConfigError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_CONFIG) from exc
+    for file in skipped:
+        typer.echo(f"skipped {file.filename}: {file.reason}", err=True)
+    double = double_annotation_sample(
+        (document.paper_id for document in documents), seed, settings.splits
+    )
+    out.mkdir(parents=True, exist_ok=True)
+    with (out / "gold_template.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow([*GOLD_COLUMNS, "file", "double_annotate"])
+        for document in documents:
+            for spec in specs:
+                flag = "yes" if document.paper_id in double else ""
+                writer.writerow([document.paper_id, spec.name, "", document.filename, flag])
+    typer.echo(
+        f"Wrote {len(documents) * len(specs)} rows for {len(documents)} papers; "
+        f"{len(double)} papers (seed {seed}) are marked for a second annotator. "
+        'Write "NR" where a paper does not report a field.'
+    )
+
+
+@app.command("check-gold")
+def check_gold_file(
+    gold: Annotated[Path, typer.Option(help="Gold file (CSV) to validate.")],
+    fields: Annotated[Path, typer.Option(help="Field list (YAML).")],
+    second: Annotated[
+        Path | None, typer.Option(help="A second annotator's gold file, to measure agreement.")
+    ] = None,
+    env_file: Annotated[Path | None, typer.Option(help="Settings file (.env format).")] = None,
+) -> None:
+    """Validate a gold file and report per-field counts and, given two, agreement."""
+    try:
+        settings = load_settings(env_file)
+        specs = load_fields(fields)
+        values = load_gold(gold, specs)
+        other = load_gold(second, specs) if second is not None else None
+    except ConfigError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_CONFIG) from exc
+    papers = {paper_id for paper_id, _ in values}
+    typer.echo(f"{gold.name} is valid: {len(values)} values for {len(papers)} papers.")
+    for spec in specs:
+        labelled = [value for (_, field), value in values.items() if field == spec.name]
+        not_reported = sum(value is None for value in labelled)
+        typer.echo(f"  {spec.name}: {len(labelled)} values, {not_reported} not reported")
+    if other is None:
+        return
+    typer.echo(f"Agreement with {second.name if second else ''} on papers both labelled:")
+    for result in agreement(values, other, specs, settings.matching):
+        rate = "no shared items" if result.rate is None else percent(result.rate)
+        typer.echo(f"  {result.field}: {rate} ({result.agreed} of {result.compared})")

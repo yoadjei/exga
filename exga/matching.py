@@ -174,14 +174,22 @@ def is_correct(
 ) -> bool:
     """return whether a predicted value is correct against the gold value (spec 6.4).
 
-    raises ConfigError when the gold value itself is malformed: not a number for a numeric
-    field, or not an allowed value for a categorical field.
+    raises ConfigError when the gold value itself is malformed (see `check_gold`).
+    """
+    check_gold(gold, spec)
+    return values_match(pred, gold, spec, rules)
+
+
+def check_gold(gold: str | None, spec: FieldSpec) -> None:
+    """raise ConfigError when gold cannot be an answer for spec.
+
+    a numeric gold value must contain a number; a categorical one must name an allowed value.
+    "not reported" (None) is always valid.
     """
     if gold is not None and spec.group == "numeric" and parse_number(gold) is None:
         raise ConfigError(f"gold value {gold!r} for numeric field {spec.name} is not a number")
     if gold is not None and spec.group == "categorical" and allowed_value(gold, spec) is None:
         raise ConfigError(f"gold value {gold!r} is not allowed for field {spec.name}")
-    return values_match(pred, gold, spec, rules)
 
 
 def allowed_value(text: str, spec: FieldSpec) -> str | None:

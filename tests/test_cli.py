@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import shutil
@@ -138,3 +139,54 @@ def test_a_spent_budget_stops_the_run_with_its_own_exit_code(
     assert code == cli.EXIT_BUDGET
     assert "Rerun to continue" in stderr
     assert not (tmp_path / "run" / "samples.jsonl").exists()
+
+
+def test_the_annotation_sheet_lists_every_paper_and_field(tmp_path: Path, papers: Path) -> None:
+    out = tmp_path / "sheet"
+
+    code, stdout, _ = run(
+        "annotation-sheet", "--papers", str(papers), "--fields", str(EXAMPLE_FIELDS),
+        "--out", str(out),
+    )  # fmt: skip
+
+    assert code == 0
+    with (out / "gold_template.csv").open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) == 6
+    assert {row["file"] for row in rows} == {"trial.pdf"}
+    assert {row["double_annotate"] for row in rows} == {"yes"}
+    assert "1 papers (seed 0) are marked for a second annotator" in stdout
+
+
+def gold_file(path: Path, paper_id: str, size: str, design: str) -> Path:
+    path.write_text(
+        f"paper_id,field,value\n{paper_id},sample_size,{size}\n{paper_id},study_design,{design}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_check_gold_reports_counts_and_agreement(tmp_path: Path) -> None:
+    paper_id = "a" * 64
+    first = gold_file(tmp_path / "first.csv", paper_id, "120", "rct")
+    second = gold_file(tmp_path / "second.csv", paper_id, "120", "cohort")
+
+    code, stdout, _ = run(
+        "check-gold", "--gold", str(first), "--fields", str(EXAMPLE_FIELDS),
+        "--second", str(second),
+    )  # fmt: skip
+
+    assert code == 0
+    assert "first.csv is valid: 2 values for 1 papers." in stdout
+    assert "sample_size: 100% (1 of 1)" in stdout
+    assert "study_design: 0% (0 of 1)" in stdout
+    assert "country: no shared items" in stdout
+
+
+def test_check_gold_rejects_a_malformed_file(tmp_path: Path) -> None:
+    bad = gold_file(tmp_path / "bad.csv", "a" * 64, "lots", "rct")
+
+    code, _, stderr = run("check-gold", "--gold", str(bad), "--fields", str(EXAMPLE_FIELDS))
+
+    assert code == cli.EXIT_CONFIG
+    assert "line 2" in stderr
