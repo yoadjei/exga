@@ -6,11 +6,21 @@ reported descriptively; nothing here tests a hypothesis.
 """
 
 import random
+import statistics
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from exga.export import read_cell
+from exga.labels import NOT_REPORTED
+from exga.matching import is_correct
+from exga.schemas import FieldSpec
+from exga.settings import MatchingSettings
+
 Condition = Literal["manual", "tool"]
 PaperSet = Literal["A", "B"]
+Answers = dict[tuple[str, str], str | None]
+"""(paper file name, field) -> value; None means "not reported"."""
 
 ORDERS: tuple[tuple[Condition, PaperSet], ...] = (
     ("manual", "A"),
@@ -81,3 +91,106 @@ def sus_score(responses: list[int]) -> float:
         for number, answer in enumerate(responses, start=1)
     )
     return total * SUS_MULTIPLIER
+
+
+def sheet_answers(rows: Iterable[Mapping[str, str | None]]) -> Answers:
+    """a filled manual sheet (columns paper, field, value) as answers.
+
+    "NR" means the participant found the field not reported (None); an empty cell is no
+    answer and is left out, so it counts as unanswered.
+    """
+    answers: Answers = {}
+    for row in rows:
+        value = (row["value"] or "").strip()
+        if value:
+            answers[_key(row)] = None if value == NOT_REPORTED else value
+    return answers
+
+
+def export_answers(rows: Iterable[Mapping[str, str | None]]) -> Answers:
+    """an exga results.csv as answers: the value the participant checked, else the model's.
+
+    an empty final value (a failed extraction nobody checked) is no answer and is left out.
+    """
+    answers: Answers = {}
+    for row in rows:
+        checked = read_cell(row["checked_value"] or "")
+        value = checked or read_cell(row["value"] or "")
+        if value:
+            answers[_key(row)] = None if value == NOT_REPORTED else value
+    return answers
+
+
+def checked_items(rows: Iterable[Mapping[str, str | None]]) -> int:
+    """how many items of an exga results.csv a person checked."""
+    return sum(bool(row["checked_value"]) for row in rows)
+
+
+@dataclass(frozen=True)
+class Accuracy:
+    """how many of a paper set's gold items a participant answered correctly."""
+
+    items: int
+    correct: int
+    unanswered: int
+
+    @property
+    def rate(self) -> float:
+        """share of items answered correctly; unanswered items count as wrong."""
+        return self.correct / self.items
+
+
+def accuracy(
+    answers: Mapping[tuple[str, str], str | None],
+    gold: Mapping[tuple[str, str], str | None],
+    specs: Mapping[str, FieldSpec],
+    rules: MatchingSettings,
+) -> Accuracy:
+    """score answers against gold with each field's correctness rule (spec 6.4).
+
+    every gold item counts; answers to items without gold are ignored.
+    """
+    correct = sum(
+        key in answers and is_correct(answers[key], truth, specs[key[1]], rules)
+        for key, truth in gold.items()
+    )
+    unanswered = sum(key not in answers for key in gold)
+    return Accuracy(items=len(gold), correct=correct, unanswered=unanswered)
+
+
+@dataclass(frozen=True)
+class Summary:
+    """centre and spread of one measure; sd is undefined for a single value."""
+
+    n: int
+    mean: float
+    sd: float | None
+    median: float
+    q1: float
+    q3: float
+    minimum: float
+    maximum: float
+
+
+def describe(values: Sequence[float]) -> Summary | None:
+    """a descriptive summary of values (quartiles inclusive of the extremes); None if empty."""
+    if not values:
+        return None
+    if len(values) == 1:
+        q1 = q3 = values[0]
+    else:
+        q1, _, q3 = statistics.quantiles(values, n=4, method="inclusive")
+    return Summary(
+        n=len(values),
+        mean=statistics.fmean(values),
+        sd=statistics.stdev(values) if len(values) > 1 else None,
+        median=statistics.median(values),
+        q1=q1,
+        q3=q3,
+        minimum=min(values),
+        maximum=max(values),
+    )
+
+
+def _key(row: Mapping[str, str | None]) -> tuple[str, str]:
+    return read_cell(row["paper"] or "").strip(), (row["field"] or "").strip()
