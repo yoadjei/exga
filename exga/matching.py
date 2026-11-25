@@ -146,11 +146,22 @@ def is_correct(
     """
     if gold is not None and spec.group == "numeric" and parse_number(gold) is None:
         raise ConfigError(f"gold value {gold!r} for numeric field {spec.name} is not a number")
-    if gold is not None and spec.group == "categorical":
-        allowed = {_canonical(value, spec) for value in spec.allowed_values or ()}
-        if _canonical(gold, spec) not in allowed:
-            raise ConfigError(f"gold value {gold!r} is not allowed for field {spec.name}")
+    if gold is not None and spec.group == "categorical" and allowed_value(gold, spec) is None:
+        raise ConfigError(f"gold value {gold!r} is not allowed for field {spec.name}")
     return values_match(pred, gold, spec, rules)
+
+
+def allowed_value(text: str, spec: FieldSpec) -> str | None:
+    """return the allowed value that text names, spelt as in spec.allowed_values.
+
+    text is compared after normalisation and synonym mapping, as in `values_match`. returns
+    None when text names no allowed value, or when spec has no allowed values.
+    """
+    target = _canonical(text, spec)
+    for value in spec.allowed_values or ():
+        if _canonical(value, spec) == target:
+            return value
+    return None
 
 
 def _canonical(text: str, spec: FieldSpec) -> str:

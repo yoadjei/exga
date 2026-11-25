@@ -1,7 +1,14 @@
 import pytest
 
 from exga.errors import ConfigError
-from exga.matching import is_correct, normalise_text, parse_number, token_f1, values_match
+from exga.matching import (
+    allowed_value,
+    is_correct,
+    normalise_text,
+    parse_number,
+    token_f1,
+    values_match,
+)
 from exga.schemas import FieldSpec
 from exga.settings import MatchingSettings
 
@@ -198,3 +205,22 @@ def test_thresholds_come_from_settings() -> None:
 
     assert is_correct("the United Kingdom", "United Kingdom", COUNTRY, RULES)
     assert not is_correct("the United Kingdom", "United Kingdom", COUNTRY, strict)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("rct", "rct"),
+        ("RCT", "rct"),
+        ("Randomized Controlled Trial", "rct"),
+        ("case-control study", "case_control"),
+        ("case control", "case_control"),
+        ("cross-sectional", None),
+    ],
+)
+def test_allowed_value_names_the_option_a_text_refers_to(text: str, expected: str | None) -> None:
+    assert allowed_value(text, DESIGN) == expected
+
+
+def test_allowed_value_is_none_for_fields_without_options() -> None:
+    assert allowed_value("usa", COUNTRY) is None
