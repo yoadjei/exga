@@ -2,106 +2,70 @@
 
 ## Current state
 
-- **Phase:** P0 (setup). Everything in P0 is built and passes locally. The acceptance check has
-  two parts still outside my control: a CI run on GitHub, and owner review of ADRs 0001–0002.
-  P1 (matching and calibration core) comes next.
-- **Branch:** `chore/p0-setup`, 7 commits on top of `main`, not merged. A local hook blocks
-  edits on `main`, so work happens on branches; merge after CI is green (spec 0A.8).
 - **Last updated:** 2026-11-25
+- **Phase:** P1 complete; P2 (PDF processing) next.
+- **Repository:** https://github.com/yoadjei/exga. Each phase is built on a branch, pushed, and
+  fast-forwarded into `main` once GitHub CI is green. A local hook blocks edits on `main`.
+- **Decision authority:** on 2026-11-25 the owner delegated all remaining decisions to the lead
+  engineer, after reasoning. Each is recorded in an ADR or in the decisions below.
 
-## P0 acceptance check (spec section 12)
+## Phases (spec section 12)
 
-| Criterion | Status | Evidence |
-|---|---|---|
-| CI green | local equivalent passes; GitHub run pending | A fresh clone with `UV_LOCKED=1` runs `uv sync --locked`, `ruff check`, `ruff format --check`, `mypy` (strict, 11 files) and `pytest` (78 passed, 100% line and branch coverage) on Python 3.11.16, all passing; `uv build` produces sdist and wheel. The repo has no GitHub remote, so `.github/workflows/ci.yml` has never run. `make` is not installed here, so its recipes were run as their underlying commands. |
-| ADRs reviewed by owner | pending | [ADR 0001](adr/0001-risk-control-method.md), [ADR 0002](adr/0002-dependencies.md) |
-
-## Done (session 2026-11-25)
-
-- Repository initialised; owner's `CLAUDE.md` and spec committed as given, then the project
-  was renamed from extractguard to exga in a separate commit (20 lines).
-- Tooling: `pyproject.toml` (hatchling, ruff, mypy strict with the pydantic plugin, pytest,
-  coverage), `uv.lock`, `.python-version` (3.11), `Makefile`, CI workflow, `.gitignore`,
-  `.gitattributes` (LF everywhere), MIT `LICENSE`, minimal `README.md`.
-- `exga/errors.py`: `ExgaError` and `ConfigError`, `PdfParseError`, `LLMResponseError`,
-  `InsufficientCalibrationError`.
-- `exga/settings.py`: `Settings` with the calibration group (α 0.05, δ 0.1, m_min 10, grid
-  step 0.005) and `load_settings`, which raises `ConfigError` naming the bad setting.
-- `exga/schemas.py`: `FieldSpec`, `Paper`, `SampleAnswer`, `SpanLocation`, `Signals`,
-  `Extraction`, `CalibrationRecord`, `ThresholdResult`, `TokenLogprob`, `RawResponse`.
-- `exga/llm/base.py` (`LLMClient` protocol) and `exga/llm/mock.py` (`MockLLMClient`).
-- ADR 0001 and ADR 0002; `docs/limitations.md`.
+| Phase | Acceptance check | Status | Evidence |
+|---|---|---|---|
+| P0 Setup | CI green; ADRs reviewed | **done** | CI run on `chore/p0-setup` green; ADRs 0001–0002 accepted under delegation |
+| P1 Matching and calibration core | 9.2 test passes; edge cases covered | **done** | `tests/test_guarantee_sim.py`; `make verify-guarantee`: 30/30 configurations within δ + 0.02 (`results/guarantee_simulation.csv`) |
+| P2 PDF processing | fixture tests pass; highlights render | next | |
+| P3 Extraction | 10 real PDFs, < 5% parse failures | | |
+| P4 Scoring and decisions | end-to-end test with mock client | | |
+| P5 Data | gold files validated; splits reproducible | | |
+| P6 Audit and updating | unit tests; biased vs random audit simulation | | |
+| P7 Web app | owner completes upload → review → audit → export | | |
+| P8 Experiments | tables and figures from configs | | |
+| P9 User study | data collected and summarised | | |
+| P10 Packaging and docs | clean `pip install`; app runs from README | | |
+| P11 Thesis support | owner sign-off | | |
 
 ## Test status
 
-78 tests pass; 100% line and branch coverage of `exga/`; ruff, format check and mypy strict
-are clean. Coverage is reported but not yet gated (see next step).
+203 tests pass in about 15 s. The pure core (`matching`, `calibrate`, `simulation`) has 100%
+line and branch coverage, gated at 90% in `make test`. ruff and mypy (strict) are clean.
+`make bench`: calibration of 10,000 items takes about 2 ms (budget 1 s).
 
 ## Decisions
 
-- **ADR 0001**: fixed-sequence binomial testing for threshold certification (spec 5.3 as written).
-- **ADR 0002**: httpx behind `LLMClient`, no orchestration frameworks; each dependency enters
-  with the code that first imports it; pyyaml added to the spec's list.
-- Smaller choices, explained in commit messages, with no ADR needed:
-  - flat `exga/` layout, as in spec section 8;
-  - settings groups arrive with their first consumer, so P0 has only `calibration`;
-  - schema refinements in line with spec 0A.1: typed `location` and `signals` instead of
-    dicts, and `ThresholdResult` carrying α, δ, `n_cal` and `errors_cal` so messages can be
-    worded from the result alone;
-  - `_Record`, a config-only base model, so mypy rejects mutation of records statically;
-  - `LLMClient` is a `Protocol` and takes `seed` (it is part of the spec 7.2 cache key);
-  - the mock client lives in the library, so it is type-checked against `LLMClient`;
-  - Makefile rather than justfile; CI on ubuntu with Python 3.11 only;
-  - ruff format skips Markdown, so it never rewrites the spec's code snippets;
-  - `tasks/` (personal session notes) is git-ignored.
+| ADR | Decision |
+|---|---|
+| [0001](adr/0001-risk-control-method.md) | fixed-sequence binomial testing; the bound is per field |
+| [0002](adr/0002-dependencies.md) | httpx behind `LLMClient`, no frameworks; dependencies enter with first use; keep PyMuPDF (AGPL) |
+| [0003](adr/0003-correctness-rules.md) | correctness rules: first number, no "m" suffix, decimal parsing, synonyms also for short_text, malformed gold raises |
+| [0004](adr/0004-sequence-start-floor.md) | start testing at required_n(α, δ, 0): the spec's m_min = 10 rule could never certify at α ≤ 0.2 |
+| [0005](adr/0005-calibration-units-and-pooling.md) | per-field calibration; pool by field group only when a field has fewer records than the floor |
 
-## Open questions for the owner
+Smaller choices are explained in commit messages.
 
-1. **Review ADR 0001 and ADR 0002.** This is part of P0's acceptance check. Recommendation:
-   accept both. The two points below need your judgement.
-2. **PyMuPDF is AGPL-3.0** (ADR 0002). exga's own code can stay MIT, but anyone distributing
-   exga with PyMuPDF, or running a modified copy as a network service, must meet the AGPL
-   terms. Recommendation: keep PyMuPDF (the spec names it, and it gives word boxes and page
-   rendering in one package) and state the dependency's licence in the README from P2. The
-   alternative is pdfplumber (MIT), which I would benchmark in P2 before switching.
-3. **Per-field or simultaneous guarantee** (ADR 0001, `docs/limitations.md`). As specified,
-   each field's bound holds with probability 1 − δ on its own; with 8 fields at δ = 0.1, the
-   chance that some field's bound fails can reach 0.57. Recommendation: keep it per field and
-   say "per field" in every message. A simultaneous bound (δ/F per field) would roughly double
-   the calibration data each field needs (42 instead of 22 accepted items at α = 0.10). This
-   changes what the tool promises, so it is your decision.
-4. **`.env.example` was not created.** Your permission settings deny writing it (it matches a
-   `.env*` rule). Either create it yourself with the content below, or allow that one file.
-   ```
-   # copy to .env for local overrides; .env is git-ignored and must never be committed.
-   # every setting can be set with an EXGA_ variable; nested groups use a double underscore.
-   # environment variables take precedence over values in this file.
-   EXGA_CALIBRATION__ALPHA=0.05
-   EXGA_CALIBRATION__DELTA=0.1
-   ```
-5. **GitHub remote.** CI cannot run until the repository is pushed. Create the GitHub repo, push
-   `main` and `chore/p0-setup`, and open a pull request; merge once CI is green. I have not
-   pushed anything.
+## Findings the owner should know about
 
-Heads-up, no action needed yet: ADR 0001 has an open point about the m_min skip rule. P1 will
-test it; if the procedure needs to change, I will bring it to you before changing it.
+1. **The spec's threshold procedure, read literally, never certifies** at α ≤ 0.2. With
+   m_min = 10, the first tested threshold has about 10 items, but at α = 0.05 even zero errors
+   need 45, so the sequence stops at once. ADR 0004 fixes this without weakening the guarantee.
+   The fix is proven valid when higher scores are not more often wrong, and checked by
+   simulation when they are.
+2. **One spec property is false.** "Adding a correct high-score record never removes
+   certification" (spec 0A.4) cannot hold for any procedure that skips sparse thresholds. A
+   test shows the counterexample. The test suite checks the true version instead: correcting a
+   wrong label never removes certification.
+3. **Biased calibration breaks the guarantee badly.** Dropping half of the wrong values raises
+   the violation rate from about 0.06 to 0.84. This supports the random-audit-only rule (5.6).
 
 ## Known issues (environment)
 
-- `uv` 0.12.19 was installed with pip into
-  `C:\Users\adjei\AppData\Local\Python\pythoncore-3.14-64\Scripts`, which is not on `PATH`.
-  Add that folder to `PATH` so `uv` and `make` work in new shells.
-- GNU make is not installed: `winget install ezwinports.make`. Until then, run the commands in
-  the `Makefile` directly.
+- `uv` and `make` are not on PATH for new shells. `C:\Users\adjei\Downloads\fix-dev-path-all-users.ps1`
+  installs both machine-wide with winget; it must be run once from an administrator PowerShell.
+  It has not been run or tested.
 
 ## Next step
 
-Start P1 (re-read spec 5, 6.4 and 9.2 first):
-1. `matching.py`, test first: the spec 6.4 rules (number parsing for "1,234", "1.2k",
-   "n = 120" and number words; categorical synonyms; token-F1 thresholds as settings).
-2. `calibrate.py`: fixed grid built from `grid_step`, `fit_threshold`, `required_n`,
-   Clopper–Pearson bound; hypothesis property tests (spec 0A.4).
-3. `tests/test_guarantee_sim.py` (spec 9.2), plus non-monotone error curves for the ADR 0001
-   open point; `make verify-guarantee` and `scripts/bench.py`.
-4. Add numpy, scipy (with `scipy-stubs` for mypy) and hypothesis, plus a 90% coverage floor
-   on the pure-core modules once they exist.
+P2: `pdf.py` with `load_pdf` (page text and word boxes), `find_span` (exact, normalised, then
+fuzzy match with rapidfuzz, ratio ≥ 90) and `chunk`, plus fixture PDFs generated by a script
+and highlight rendering.
