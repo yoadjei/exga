@@ -11,8 +11,8 @@ import json
 import logging
 import math
 import re
-from collections.abc import Mapping, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from string import Template
@@ -244,15 +244,38 @@ def extract_all(
     prompts: Prompts,
     settings: Settings,
 ) -> list[FieldSamples]:
-    """extract every field from every paper on settings.extraction.workers threads.
+    """extract every field from every paper; results are in document order, then field order."""
+    pairs = [(document, spec) for document in documents for spec in specs]
+    return extract_pairs(pairs, client, prompts, settings)
 
-    results are in document order, then field order. the client must be thread-safe.
+
+def extract_pairs(
+    pairs: Sequence[tuple[Document, FieldSpec]],
+    client: LLMClient,
+    prompts: Prompts,
+    settings: Settings,
+    progress: Callable[[int, int], None] | None = None,
+) -> list[FieldSamples]:
+    """extract each (paper, field) pair on settings.extraction.workers threads, in pair order.
+
+    the client must be thread-safe. progress(done, total) is called on the calling thread
+    after each item finishes, so a UI can update from it. the first BudgetExceededError
+    cancels the items not yet started and is raised.
     """
-    items = [(document, spec) for document in documents for spec in specs]
     with ThreadPoolExecutor(max_workers=settings.extraction.workers) as pool:
-        return list(
-            pool.map(lambda item: extract_item(item[0], item[1], client, prompts, settings), items)
-        )
+        futures = [
+            pool.submit(extract_item, document, spec, client, prompts, settings)
+            for document, spec in pairs
+        ]
+        try:
+            for done, future in enumerate(as_completed(futures), start=1):
+                future.result()  # raises the first failure without waiting for the rest
+                if progress is not None:
+                    progress(done, len(futures))
+        except BaseException:
+            pool.shutdown(cancel_futures=True)
+            raise
+    return [future.result() for future in futures]
 
 
 def parse_failure_rate(items: Sequence[FieldSamples]) -> float | None:

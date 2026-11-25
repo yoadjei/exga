@@ -8,6 +8,7 @@ from exga.extract import (
     answer_schema,
     extract_all,
     extract_item,
+    extract_pairs,
     load_prompts,
     parse_failure_rate,
 )
@@ -150,6 +151,33 @@ def test_extract_all_returns_items_in_paper_then_field_order() -> None:
         (other.paper_id, "sample_size"),
         (other.paper_id, "country"),
     ]
+
+
+def test_extract_pairs_reports_progress_once_per_item() -> None:
+    other = text_document("Sixty participants were randomised in Kenya.", "other.md")
+    client = MockLLMClient(lambda _call, _index: GOOD)
+    seen: list[tuple[int, int]] = []
+
+    items = extract_pairs(
+        [(other, COUNTRY), (PAPER, SAMPLE_SIZE)],
+        client,
+        PROMPTS,
+        SETTINGS,
+        progress=lambda done, total: seen.append((done, total)),
+    )
+
+    assert [(item.paper_id, item.field) for item in items] == [
+        (other.paper_id, "country"),
+        (PAPER.paper_id, "sample_size"),
+    ]
+    assert seen == [(1, 2), (2, 2)]
+
+
+def test_a_spent_budget_stops_extract_pairs() -> None:
+    client = RefusingClient(BudgetExceededError("spent"))
+
+    with pytest.raises(BudgetExceededError):
+        extract_pairs([(PAPER, SAMPLE_SIZE), (PAPER, COUNTRY)], client, PROMPTS, SETTINGS)
 
 
 def samples_record(
