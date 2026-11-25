@@ -146,7 +146,7 @@ def test_alpha_exceedances_count_certified_fields_that_accepted_something() -> N
     )
     run.fields["events"] = run.fields["events"].with_outcome(Outcome(10, 5, 10, 5))
 
-    above, counted = alpha_exceedances([run], alpha=0.2)
+    above, counted = alpha_exceedances(run.fields.values(), alpha=0.2)
 
     assert (above, counted) == (1, 2)
 

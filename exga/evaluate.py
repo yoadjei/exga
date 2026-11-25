@@ -6,7 +6,7 @@ measure exactly the deployed method.
 """
 
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Literal
@@ -239,17 +239,12 @@ def run_split(
     return SplitRun(fields=fields, baselines=baselines, test=test, accepted=accepted)
 
 
-def alpha_exceedances(runs: Sequence[SplitRun], alpha: float) -> tuple[int, int]:
+def alpha_exceedances(runs: Iterable[FieldRun], alpha: float) -> tuple[int, int]:
     """(field runs with realised test error above alpha, certified field runs that accepted
     anything). the ratio overstates true violations, because test sets are small (ADR 0011)."""
-    counted = [
-        run.outcome
-        for split in runs
-        for run in split.fields.values()
-        if run.certified and run.outcome.accepted > 0
-    ]
-    above = sum((result.realised_error or 0.0) > alpha for result in counted)
-    return above, len(counted)
+    measured = [run.outcome for run in runs if run.certified and run.outcome.accepted > 0]
+    above = sum((result.realised_error or 0.0) > alpha for result in measured)
+    return above, len(measured)
 
 
 @dataclass(frozen=True)
