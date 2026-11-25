@@ -81,6 +81,30 @@ class DocumentSettings(BaseModel):
     """page rendering scale for highlights: 1.5 gives 108 dpi, legible without large images."""
 
 
+class SplitSettings(BaseModel):
+    """shares of papers in each split (spec 10.3); the test split gets the rest."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", use_attribute_docstrings=True)
+
+    train: float = Field(default=0.3, ge=0.0, lt=1.0)
+    """share of papers for fitting a score model; never used for thresholds."""
+
+    calibration: float = Field(default=0.4, gt=0.0, lt=1.0)
+    """share of papers for certifying thresholds."""
+
+    repetitions: int = Field(default=50, ge=1)
+    """random splits per experiment, to estimate how often the guarantee fails."""
+
+    double_annotation: float = Field(default=0.2, gt=0.0, le=1.0)
+    """share of annotated papers labelled by a second person, to measure agreement."""
+
+    @model_validator(mode="after")
+    def _check_test_split_is_left(self) -> Self:
+        if self.train + self.calibration >= 1.0:
+            raise ValueError("train + calibration must leave a share for the test split")
+        return self
+
+
 class ScoreSettings(BaseModel):
     """weights of the default combined score, a weighted average of the signals (spec 7.4).
 
@@ -217,6 +241,9 @@ class Settings(BaseSettings):
 
     score: ScoreSettings = Field(default_factory=ScoreSettings)
     """combined-score weights."""
+
+    splits: SplitSettings = Field(default_factory=SplitSettings)
+    """data splits for experiments."""
 
     hosted: HostedSettings = Field(default_factory=HostedSettings)
     """the chat-completions model back-end."""
