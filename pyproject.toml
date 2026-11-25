@@ -31,6 +31,7 @@ build-backend = "hatchling.build"
 dev = [
     "hypothesis>=6.170.17",
     "mypy>=2.4.1",
+    "pandas-stubs>=3.1.0.261029",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.6",
