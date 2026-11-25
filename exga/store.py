@@ -253,6 +253,11 @@ class ProjectStore:
                 raise ConfigError(f"audit batch {batch_id} is not open")
             _insert_records(connection, records)
 
+    def audit_batch_count(self) -> int:
+        """how many audit batches have been drawn, open or closed."""
+        with self._connect() as connection:
+            return int(connection.execute("SELECT COUNT(*) FROM audit_batches").fetchone()[0])
+
     def open_audit(self) -> int | None:
         """the id of the batch still being checked, if any."""
         with self._connect() as connection:

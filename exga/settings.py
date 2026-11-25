@@ -92,6 +92,9 @@ class AuditSettings(BaseModel):
     min_items: int = Field(default=3, ge=1)
     """smallest audit batch, so small projects still collect records."""
 
+    seed: int = 0
+    """base seed of audit draws; batch k uses seed + k, so a project's draws can be replayed."""
+
 
 class SplitSettings(BaseModel):
     """shares of papers in each split (spec 10.3); the test split gets the rest."""

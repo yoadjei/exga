@@ -23,9 +23,12 @@ record only if it was chosen independently of whether the value is right.
 ## Decision
 
 - Each review session, exga draws a uniform random sample from all extracted items: a share of
-  `audit.rate` (default 5%), at least `audit.min_items` (3). Every drawn item must be labelled
-  correct or wrong. A drawn item that is left unlabelled is recorded as skipped, and the batch
-  is incomplete.
+  `audit.rate` (default 5%), at least `audit.min_items` (3). Items already audited are not drawn
+  again, so no item gives two records. Each drawn item is labelled with the value found in the
+  paper. Only an item that cannot be checked at all, for example because its file is missing,
+  may be skipped. Skips are counted and shown, because skipping the hard items, which are more
+  often wrong, would bias the records. A batch closes only when every item is labelled or
+  skipped.
 - Only labels of drawn items become `CalibrationRecord(source="random_audit")`. Corrections a
   user makes elsewhere are stored as data corrections and never enter calibration.
 - After each completed batch, thresholds are recomputed and the result is appended to a
