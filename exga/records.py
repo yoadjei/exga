@@ -1,7 +1,7 @@
 """JSON-lines files of typed records: one pydantic model as JSON per line.
 
-experiments write extraction samples (samples.jsonl) and benchmark calibration records
-(records.jsonl) this way, and a project can import the records as calibration data
+experiments write extraction samples (samples.jsonl) and calibration records
+(records/<model>.jsonl) this way, and a project can import the records as calibration data
 (spec 5.3). random-audit records are never imported; see `exga.project`.
 """
 

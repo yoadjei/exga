@@ -102,10 +102,11 @@ with gold_column, st.form("import_gold", clear_on_submit=True):
             ui.flash(f"Imported checked values (threshold version {version.version}).")
             st.rerun()
 with records_column, st.form("import_records", clear_on_submit=True):
-    st.markdown("**Benchmark records**")
+    st.markdown("**Records from an experiment**")
     st.caption(
-        "records.jsonl from the benchmark experiment. They certify your papers only if your "
-        "papers resemble the benchmark's and were extracted with the same model and prompt."
+        "records/<model>.jsonl from an experiment's results folder. They certify your papers "
+        "only if your papers resemble the experiment's and were extracted with the same model "
+        "and prompt."
     )
     records_file = st.file_uploader("records.jsonl", type=["jsonl"])
     if st.form_submit_button("Import") and records_file is not None:

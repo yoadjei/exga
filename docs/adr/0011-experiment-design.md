@@ -48,14 +48,25 @@ any model run.
    uniformly without replacement from the calibration papers' items, recalibrate after each
    batch on all audit records so far, and measure acceptance and realised error on the test
    papers. Curves are averaged over splits.
-8. **Outputs** go to `results/<name>-<hash>/`: `manifest.json`, `tables/*.csv` and
-   `figures/*.png`. The hash is the first 8 hex digits of the sha256 of the validated
+8. **Outputs** go to `results/<name>-<hash>/`: `manifest.json`, `tables/*.csv`,
+   `figures/*.png` and `records/*.jsonl` (decision 12). The hash is the first 8 hex digits of the sha256 of the validated
    config, so a changed config never overwrites earlier results.
 9. **Manifest** (spec 0A.5): git commit and whether the tree was dirty, the config, the
    settings, model ids, prompt versions, seeds, the benchmark's commit and annotation hash,
    the sha256 of every input file, and Python and package versions.
 10. **Figures** use matplotlib, a development dependency only: experiments run from the
     repository, and the installed package never draws.
+11. **Both datasets** (spec 11A, added the same day before any run). A config's `data` is
+    the benchmark (decision 1) or the owner's annotated set (spec 10.2): a papers folder,
+    its field list and `gold.csv`. An item is a (paper, field) with a gold value; the same
+    splits, metrics and outputs apply. Gold for a paper that is missing from the folder, or
+    could not be read, stops the run: silently dropping it would shrink the set without a
+    trace. `experiments/annotated.yaml` holds the annotated run.
+12. **Records files.** `evaluate` also writes `records/<model>.jsonl`: every labelled item as
+    a calibration record, scored with the deployed weights (`Settings.score`), not the
+    ablation variants, and marked `benchmark` or `annotation`. This is the file the
+    Calibrate page imports. It certifies a project's papers only if they resemble the
+    dataset and were extracted with the same model and prompt (PROGRESS finding 11).
 
 ## Consequences
 

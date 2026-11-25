@@ -22,7 +22,7 @@
 | P5 Data | gold files validated; splits reproducible | **done for the benchmark; annotated set waits for labels** | benchmark gold validated on all 550 TEST items; split shuffle pinned by a golden test; `exga check-gold` validates the owner's file |
 | P6 Audit and updating | unit tests; biased vs random audit simulation | **done** | `tests/test_audit*.py`, `tests/test_store.py`, `tests/test_project.py`; `results/audit_simulation.csv`: random audits 0.000–0.034 of versions violated, biased logging up to 0.456 |
 | P7 Web app | owner completes upload → review → audit → export | **built; walk-through waits for the owner and a model endpoint** | `tests/test_app.py` drives every page with AppTest (24 tests, upload through export); a real-browser pass on a running server checked rendering, the highlighted PDF page and the privacy settings |
-| P8 Experiments | tables and figures from configs | **built; the real run waits for model endpoints** | `tests/test_experiments_run.py` runs `experiments/run.py` end to end on a mock model and a benchmark in the downloaded layout: all four tables, three figures (rendered and inspected) and the manifest; `tests/test_evaluate.py`, `tests/test_experiment.py`. No results exist yet, and none are made up |
+| P8 Experiments | tables and figures from configs | **built; the real run waits for model endpoints** | `tests/test_experiments_run.py` runs `experiments/run.py` end to end on a mock model and a benchmark in the downloaded layout: all four tables, three figures (rendered and inspected), the records file and the manifest; `tests/test_evaluate.py`, `tests/test_experiment.py` (including the annotated set as a second dataset). No results exist yet, and none are made up |
 | P9 User study | data collected and summarised | | |
 | P10 Packaging and docs | clean `pip install`; app runs from README | | |
 | P11 Thesis support | owner sign-off | | |
@@ -113,11 +113,13 @@ Smaller choices are explained in commit messages.
    (or `make app`), create a project in an empty folder, add fields, upload a few PDFs, run,
    calibrate (start a random audit), review, finish the audit and export. Note anything that
    needed explanation; the check passes when nothing did.
-4. **P8 real run.** Fill in `model:` for each model in `experiments/main.yaml` and
-   `experiments/ablations.yaml` (the model must return token logprobs; the open-weight entry
-   expects a server at `localhost:8000`), set the key and a budget as in action 1, then run
-   `make experiments`. Results land in `results/<name>-<hash>/` with tables, figures and a
-   manifest. Extraction sends paid requests once; reruns use the response cache.
+4. **P8 real run.** Fill in `model:` for each model in `experiments/main.yaml`,
+   `experiments/ablations.yaml` and `experiments/annotated.yaml` (the model must return token
+   logprobs; the open-weight entry expects a server at `localhost:8000`), set the key and a
+   budget as in action 1, then run `make experiments`. The annotated run needs action 2
+   first, with the papers in `data/annotated/papers`. Results land in
+   `results/<name>-<hash>/` with tables, figures, a records file per model for the Calibrate
+   page, and a manifest. Extraction sends paid requests once; reruns use the response cache.
 
 ## Known issues (environment)
 
