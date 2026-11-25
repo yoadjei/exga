@@ -5,6 +5,7 @@ evaluation reads the saved samples, so tables are regenerated from configs witho
 requests. everything here is deterministic given the config and the samples.
 """
 
+import csv
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
@@ -439,3 +440,31 @@ def _total(run: SplitRun, fields: Sequence[str]) -> Outcome:
 def _mean(values: Sequence[float | None]) -> float | None:
     defined = [value for value in values if value is not None]
     return sum(defined) / len(defined) if defined else None
+
+
+def write_tables(tables: Tables, folder: Path) -> list[Path]:
+    """write each table as <name>.csv in folder; an empty table gives an empty file.
+
+    numbers keep 6 significant digits, None is an empty cell and booleans are true/false.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for name, rows in asdict(tables).items():
+        path = folder / f"{name}.csv"
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            if rows:
+                writer = csv.DictWriter(handle, fieldnames=list(rows[0]), lineterminator="\n")
+                writer.writeheader()
+                writer.writerows({key: _cell(value) for key, value in row.items()} for row in rows)
+        paths.append(path)
+    return paths
+
+
+def _cell(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)

@@ -16,12 +16,14 @@ from exga.errors import ConfigError
 from exga.experiment import (
     ExperimentConfig,
     ModelConfig,
+    Tables,
     evaluate,
     extract,
     label,
     load_benchmark,
     load_config,
     load_samples,
+    write_tables,
 )
 from exga.llm.mock import MockCall, MockLLMClient
 from exga.schemas import FieldSpec
@@ -241,3 +243,26 @@ def test_the_downloaded_benchmark_loads_as_550_test_items(tmp_path: Path) -> Non
 def test_a_missing_benchmark_says_how_to_get_it(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match=r"download_benchmark\.py"):
         load_benchmark(config(tmp_path, benchmark=tmp_path / "none"))
+
+
+def test_tables_are_written_as_csv_files(tmp_path: Path) -> None:
+    tables = Tables(
+        by_group=[{"model": "m", "alpha": 0.1, "realised_error": 0.0412345678, "certified": True}],
+        baselines=[{"model": "m", "cutoff": None}],
+    )
+
+    paths = write_tables(tables, tmp_path / "tables")
+
+    assert [path.name for path in paths] == [
+        "by_group.csv",
+        "by_field.csv",
+        "baselines.csv",
+        "updating.csv",
+    ]
+    assert (tmp_path / "tables" / "by_group.csv").read_text(encoding="utf-8") == (
+        "model,alpha,realised_error,certified\nm,0.1,0.0412346,true\n"
+    )
+    assert (tmp_path / "tables" / "baselines.csv").read_text(
+        encoding="utf-8"
+    ) == "model,cutoff\nm,\n"
+    assert (tmp_path / "tables" / "updating.csv").read_text(encoding="utf-8") == ""
