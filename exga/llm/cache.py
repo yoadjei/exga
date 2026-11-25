@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -52,6 +53,7 @@ class CachedLLMClient:
     def __init__(self, inner: LLMClient, root: Path) -> None:
         self._inner = inner
         self._root = root
+        self._counter_lock = threading.Lock()
         self.hits = 0
         self.misses = 0
 
@@ -78,10 +80,15 @@ class CachedLLMClient:
             self.model_id, prompt, n=n, temperature=temperature, seed=seed, json_schema=json_schema
         )
         path = self._root / key[:_SHARD_CHARS] / f"{key}.json"
-        if path.is_file():
-            self.hits += 1
+        hit = path.is_file()
+        # worker threads share one client; += on an attribute is not atomic
+        with self._counter_lock:
+            if hit:
+                self.hits += 1
+            else:
+                self.misses += 1
+        if hit:
             return _read_entry(path, n)
-        self.misses += 1
         responses = self._inner.generate(
             prompt, n=n, temperature=temperature, json_schema=json_schema, seed=seed
         )

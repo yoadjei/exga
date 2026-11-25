@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -131,3 +132,17 @@ def test_an_entry_with_the_wrong_number_of_responses_raises(
 
 def test_the_wrapper_reports_the_inner_model(tmp_path: Path, inner: MockLLMClient) -> None:
     assert CachedLLMClient(inner, tmp_path).model_id == "mock"
+
+
+def test_counters_stay_exact_when_threads_share_the_client(
+    tmp_path: Path, inner: MockLLMClient
+) -> None:
+    client = CachedLLMClient(inner, tmp_path)
+    prompts = [f"p{i % 10}" for i in range(200)]
+    for prompt in set(prompts):
+        client.generate(prompt, n=1, temperature=0.0)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda prompt: client.generate(prompt, n=1, temperature=0.0), prompts))
+
+    assert (client.hits, client.misses) == (200, 10)
