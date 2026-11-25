@@ -57,6 +57,21 @@ class MatchingSettings(BaseModel):
     """token F1 at or above which a long_text value counts as correct."""
 
 
+class DocumentSettings(BaseModel):
+    """how documents are read and searched (spec 7.1)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", use_attribute_docstrings=True)
+
+    span_min_similarity: float = Field(default=0.9, gt=0.0, le=1.0)
+    """fuzzy similarity (rapidfuzz ratio / 100) at or above which quoted text counts as found."""
+
+    min_text_chars: int = Field(default=200, ge=0)
+    """a PDF with fewer extractable characters is treated as scanned, which is out of scope."""
+
+    render_zoom: float = Field(default=1.5, gt=0.0, le=4.0)
+    """page rendering scale for highlights: 1.5 gives 108 dpi, legible without large images."""
+
+
 class Settings(BaseSettings):
     """all exga settings. build with `load_settings`, then pass explicitly."""
 
@@ -73,6 +88,9 @@ class Settings(BaseSettings):
 
     matching: MatchingSettings = Field(default_factory=MatchingSettings)
     """correctness-rule thresholds."""
+
+    document: DocumentSettings = Field(default_factory=DocumentSettings)
+    """document reading and search."""
 
 
 def load_settings(env_file: Path | None = None) -> Settings:

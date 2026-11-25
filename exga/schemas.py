@@ -16,6 +16,10 @@ RecordSource = Literal["benchmark", "annotation", "random_audit"]
 # conformal selection (spec 5.5) joins this literal when it is implemented. its bound holds
 # in expectation, not with probability 1 - delta, so user messages must change with it.
 RiskMethod = Literal["fixed_sequence"]
+DocumentSource = Literal["pdf", "text"]
+MatchMethod = Literal["exact", "normalised", "fuzzy"]
+# (x0, y0, x1, y1) in PDF points, origin at the top left of the page
+Box = tuple[float, float, float, float]
 
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 Count = Annotated[int, Field(ge=0)]
@@ -219,3 +223,77 @@ class RawResponse(_Record):
     """per-token log-probabilities; None when the back-end does not expose them."""
     input_tokens: Count
     output_tokens: Count
+
+
+class Page(_Record):
+    """the text and word layout of one page.
+
+    words, boxes and lines are aligned: word i sits in box i on line lines[i]. boxes and
+    lines are empty for plain-text documents, which have no layout.
+    """
+
+    number: PageNumber
+    text: str
+    """reading-order text with paragraphs separated by blank lines; this is what the model reads."""
+    words: tuple[str, ...]
+    boxes: tuple[Box, ...] = ()
+    lines: tuple[int, ...] = ()
+    """a key per word naming its text line, used to draw one highlight rectangle per line."""
+
+    @model_validator(mode="after")
+    def _check_layout_is_aligned(self) -> Self:
+        if self.boxes and not (len(self.boxes) == len(self.words) == len(self.lines)):
+            raise ValueError("words, boxes and lines must have the same length")
+        return self
+
+
+class Document(_Record):
+    """a paper as the pipeline sees it: a PDF with layout, or plain text without (spec 10.1)."""
+
+    paper_id: PaperId
+    filename: NonEmptyText
+    source: DocumentSource
+    pages: tuple[Page, ...] = Field(min_length=1)
+
+
+class TextMatch(_Record):
+    """where a piece of text was found: words [start, end) of one page."""
+
+    page: PageNumber
+    start: Count
+    end: Count
+    method: MatchMethod
+    """exact text, text after normalisation, or fuzzy similarity at or above the threshold."""
+    similarity: Probability
+    """1.0 for exact and normalised matches; the fuzzy similarity otherwise."""
+
+
+class Chunk(_Record):
+    """a run of a long paper's text that fits one prompt (spec 7.1)."""
+
+    index: Count
+    text: str
+    """paragraphs separated by blank lines, as in `Page.text`."""
+    paragraph_pages: tuple[PageNumber, ...] = Field(min_length=1)
+    """the page of each paragraph of text, in order."""
+    sections: tuple[str, ...]
+    """section headings that start inside this chunk, in order."""
+
+    @model_validator(mode="after")
+    def _check_every_paragraph_has_a_page(self) -> Self:
+        paragraphs = len(self.text.split("\n\n"))
+        if paragraphs != len(self.paragraph_pages):
+            raise ValueError(
+                f"{paragraphs} paragraphs but {len(self.paragraph_pages)} paragraph pages"
+            )
+        return self
+
+    @property
+    def first_page(self) -> int:
+        """the first page this chunk draws text from."""
+        return min(self.paragraph_pages)
+
+    @property
+    def last_page(self) -> int:
+        """the last page this chunk draws text from."""
+        return max(self.paragraph_pages)

@@ -3,7 +3,7 @@
 
 UV ?= uv
 # pure-core modules held to the 90% coverage floor (spec 0A.4); extended as each one lands
-CORE_MODULES = exga/matching.py,exga/calibrate.py,exga/simulation.py
+CORE_MODULES = exga/matching.py,exga/calibrate.py,exga/simulation.py,exga/document.py
 
 .PHONY: setup lint format type test verify-guarantee bench app experiments
 
