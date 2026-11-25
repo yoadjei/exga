@@ -39,4 +39,5 @@ data/benchmark/raw/
 # user-study forms, answers, papers and results stay on the researcher's machine (ADR 0012)
 study/data/
 study/papers/
+study/projects/
 results/study/
