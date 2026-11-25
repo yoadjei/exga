@@ -32,6 +32,9 @@ htmlcov/
 .claude/settings.local.json
 tasks/
 
+# the owner's gold values stay local until released with the thesis data (spec 10.2)
+data/annotated/*.csv
+
 # downloaded benchmark data (scripts/download_benchmark.py) and the model response cache
 data/benchmark/raw/
 .exga/
