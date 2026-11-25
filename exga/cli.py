@@ -7,6 +7,8 @@ budget is spent.
 
 import csv
 import json
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -32,6 +34,7 @@ app = typer.Typer(
 
 EXIT_CONFIG = 2
 EXIT_BUDGET = 3
+APP_MAIN = Path(__file__).parent / "app" / "main.py"
 
 
 def build_client(settings: Settings) -> HostedLLMClient:
@@ -179,3 +182,31 @@ def check_gold_file(
     for result in agreement(values, other, specs, settings.matching):
         rate = "no shared items" if result.rate is None else percent(result.rate)
         typer.echo(f"  {result.field}: {rate} ({result.agreed} of {result.compared})")
+
+
+@app.command("app")
+def open_app(
+    env_file: Annotated[Path | None, typer.Option(help="Settings file (.env format).")] = None,
+) -> None:
+    """Open the exga app in the browser; stop it with Ctrl+C."""
+    try:
+        load_settings(env_file)
+    except ConfigError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(EXIT_CONFIG) from exc
+    # no telemetry (spec 0A.5): Streamlit sends usage statistics unless told not to
+    args = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(APP_MAIN),
+        "--browser.gatherUsageStats=false",
+    ]
+    if env_file is not None:
+        args += ["--", "--env-file", str(env_file)]
+    try:
+        code = subprocess.call(args)
+    except KeyboardInterrupt:
+        code = 0
+    raise typer.Exit(code)

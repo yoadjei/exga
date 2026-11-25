@@ -190,3 +190,33 @@ def test_check_gold_rejects_a_malformed_file(tmp_path: Path) -> None:
 
     assert code == cli.EXIT_CONFIG
     assert "line 2" in stderr
+
+
+def test_the_app_command_starts_streamlit_without_usage_statistics(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_call(args: list[str]) -> int:
+        calls.append(args)
+        return 0
+
+    monkeypatch.setattr("subprocess.call", fake_call)
+    env_file = tmp_path / "local.env"
+    env_file.write_text("", encoding="utf-8")
+
+    result = CliRunner().invoke(cli.app, ["app", "--env-file", str(env_file)])
+
+    assert result.exit_code == 0, result.output
+    [args] = calls
+    assert args[1:4] == ["-m", "streamlit", "run"]
+    assert Path(args[4]).name == "main.py"
+    assert "--browser.gatherUsageStats=false" in args
+    assert args[-3:] == ["--", "--env-file", str(env_file)]
+
+
+def test_the_app_command_checks_the_settings_first(tmp_path: Path) -> None:
+    result = CliRunner().invoke(cli.app, ["app", "--env-file", str(tmp_path / "absent.env")])
+
+    assert result.exit_code == cli.EXIT_CONFIG
+    assert "settings file not found" in result.output
