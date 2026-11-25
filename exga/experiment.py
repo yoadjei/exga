@@ -453,7 +453,16 @@ def evaluate(
                     for name, fields in units.items()
                 ]
                 tables.by_field += [
-                    _summary(config, key, "field", spec.name, [spec.name], items, runs, alpha)
+                    _summary(
+                        config,
+                        key | {"group": spec.group},
+                        "field",
+                        spec.name,
+                        [spec.name],
+                        items,
+                        runs,
+                        alpha,
+                    )
                     for spec in specs
                 ]
                 if variant == config.primary_variant:

@@ -217,6 +217,10 @@ def test_evaluation_builds_every_table_the_same_way_twice(
     variants = len(experiment.variants)
     assert len(tables.by_group) == variants * 2  # all fields, and the numeric group
     assert len(tables.by_field) == variants * 2
+    assert {(row["field"], row["group"]) for row in tables.by_field} == {
+        ("intervention_group_size", "numeric"),
+        ("intervention_events", "numeric"),
+    }
     assert len(tables.baselines) == variants * 3
     assert {row["variant"] for row in tables.updating} == {"combined"}
     combined = next(
