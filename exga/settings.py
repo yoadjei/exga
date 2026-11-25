@@ -81,6 +81,30 @@ class DocumentSettings(BaseModel):
     """page rendering scale for highlights: 1.5 gives 108 dpi, legible without large images."""
 
 
+class ExtractionSettings(BaseModel):
+    """how answers are sampled from the model (spec 7.3)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", use_attribute_docstrings=True)
+
+    samples: int = Field(default=5, ge=1)
+    """k: sampled answers per chunk, besides the greedy one."""
+
+    temperature: float = Field(default=0.7, gt=0.0, le=2.0)
+    """temperature of the k sampled answers; the greedy answer always uses 0."""
+
+    seed: int = 0
+    """sampling seed sent to back-ends that support one, so reruns can reproduce answers."""
+
+    max_chunk_tokens: int = Field(default=24_000, ge=1_000)
+    """most paper text per prompt, in estimated tokens; longer papers are split and merged."""
+
+    prompt_version: str = Field(default="extract_v1", pattern=r"^[a-z0-9_]+$")
+    """folder under exga/prompts/ holding the prompt files; stored with every extraction."""
+
+    workers: int = Field(default=4, ge=1)
+    """items extracted in parallel; the rate limiter still caps requests (spec 0A.5)."""
+
+
 class HostedSettings(BaseModel):
     """an OpenAI-compatible chat-completions endpoint, hosted or local (ADR 0006)."""
 
@@ -168,6 +192,9 @@ class Settings(BaseSettings):
 
     document: DocumentSettings = Field(default_factory=DocumentSettings)
     """document reading and search."""
+
+    extraction: ExtractionSettings = Field(default_factory=ExtractionSettings)
+    """answer sampling."""
 
     hosted: HostedSettings = Field(default_factory=HostedSettings)
     """the chat-completions model back-end."""

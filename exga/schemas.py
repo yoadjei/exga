@@ -102,6 +102,24 @@ class SampleAnswer(_Record):
     """mean token log-probability of the answer, when the back-end exposes logprobs."""
 
 
+class FieldSamples(_Record):
+    """the model's answers for one item (paper, field), before scoring (spec 7.3)."""
+
+    paper_id: PaperId
+    field: FieldName
+    greedy: SampleAnswer | None
+    """the temperature-0 answer, which becomes the candidate value; None when it could not
+    be parsed even after one repair."""
+    samples: tuple[SampleAnswer, ...]
+    """the sampled answers that could be parsed."""
+    failed_samples: Count
+    """sampled answers that could not be parsed after one repair; they agree with nothing."""
+    error: str | None = None
+    """why the model gave no answers at all, e.g. it refused the request; None otherwise."""
+    model_id: NonEmptyText
+    prompt_version: NonEmptyText
+
+
 class SpanLocation(_Record):
     """a rectangle of text on one PDF page, in PDF points with the origin at the top left."""
 

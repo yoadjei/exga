@@ -8,26 +8,34 @@ the model reads, apart from the paper itself, lives in a versioned folder under 
 """
 
 import json
+import logging
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from string import Template
 from typing import get_args
 
-from exga.errors import ConfigError
+from exga.document import chunk, locate, text_document
+from exga.errors import ConfigError, LLMResponseError
+from exga.llm.base import LLMClient
 from exga.matching import allowed_value, parse_number
 from exga.schemas import (
     Chunk,
+    Document,
     FieldGroup,
+    FieldSamples,
     FieldSpec,
     RawResponse,
     SampleAnswer,
 )
+from exga.settings import ExtractionSettings, Settings
 
 PROMPTS_ROOT = Path(__file__).parent / "prompts"
 
+_log = logging.getLogger(__name__)
 # main.txt tells the model that lines like this mark where each page starts
 _PAGE_MARKER = "[page {}]"
 # the "value" key of a JSON object, not the word inside a string (quotes there are escaped)
@@ -161,6 +169,137 @@ def value_logprob(response: RawResponse) -> float | None:
     return math.fsum(selected) / len(selected) if selected else None
 
 
+def merge_chunks(
+    answers: Sequence[Sequence[SampleAnswer | None]],
+    parts: Sequence[Chunk],
+    min_similarity: float,
+) -> list[SampleAnswer | None]:
+    """combine per-chunk answers into one answer per sample slot.
+
+    answers[c][j] is slot j's answer for chunk c (slot 0 is the greedy answer; None means it
+    failed). each slot takes the first chunk's answer that has a value whose evidence is
+    found in that chunk, else the first answer with a value, else the first "not reported"
+    answer, else None. one chunk is returned unchanged.
+    """
+    if len(answers) == 1:
+        return list(answers[0])
+    merged: list[SampleAnswer | None] = []
+    for slot in zip(*answers, strict=True):
+        parsed = [(answer, part) for answer, part in zip(slot, parts, strict=True) if answer]
+        with_value = [(answer, part) for answer, part in parsed if answer.value is not None]
+        supported = [
+            answer
+            for answer, part in with_value
+            if _found_in(answer.evidence, part, min_similarity)
+        ]
+        candidates = supported or [answer for answer, _ in with_value] or [a for a, _ in parsed]
+        merged.append(candidates[0] if candidates else None)
+    return merged
+
+
+def extract_item(
+    document: Document,
+    spec: FieldSpec,
+    client: LLMClient,
+    prompts: Prompts,
+    settings: Settings,
+) -> FieldSamples:
+    """ask the model about one field of one paper and return its parsed answers.
+
+    a request the back-end refuses or that fails after retries gives an item with no answers
+    and the reason in `error`; a spent budget raises BudgetExceededError and stops the run.
+    """
+    sampling = settings.extraction
+    parts = chunk(document, sampling.max_chunk_tokens)
+    try:
+        answers = [_ask(client, prompts, spec, part, sampling) for part in parts]
+    except LLMResponseError as exc:
+        _log.warning("no answers for field %s of %s: %s", spec.name, document.filename, exc)
+        return FieldSamples(
+            paper_id=document.paper_id,
+            field=spec.name,
+            greedy=None,
+            samples=(),
+            failed_samples=sampling.samples,
+            error=str(exc),
+            model_id=client.model_id,
+            prompt_version=prompts.version,
+        )
+    greedy, *sampled = merge_chunks(answers, parts, settings.document.span_min_similarity)
+    return FieldSamples(
+        paper_id=document.paper_id,
+        field=spec.name,
+        greedy=greedy,
+        samples=tuple(answer for answer in sampled if answer is not None),
+        failed_samples=sum(answer is None for answer in sampled),
+        model_id=client.model_id,
+        prompt_version=prompts.version,
+    )
+
+
+def extract_all(
+    documents: Sequence[Document],
+    specs: Sequence[FieldSpec],
+    client: LLMClient,
+    prompts: Prompts,
+    settings: Settings,
+) -> list[FieldSamples]:
+    """extract every field from every paper on settings.extraction.workers threads.
+
+    results are in document order, then field order. the client must be thread-safe.
+    """
+    items = [(document, spec) for document in documents for spec in specs]
+    with ThreadPoolExecutor(max_workers=settings.extraction.workers) as pool:
+        return list(
+            pool.map(lambda item: extract_item(item[0], item[1], client, prompts, settings), items)
+        )
+
+
+def _ask(
+    client: LLMClient,
+    prompts: Prompts,
+    spec: FieldSpec,
+    part: Chunk,
+    sampling: ExtractionSettings,
+) -> list[SampleAnswer | None]:
+    prompt = build_prompt(prompts, spec, part)
+    schema = answer_schema(spec)
+    greedy = client.generate(prompt, n=1, temperature=0.0, json_schema=schema, seed=sampling.seed)
+    sampled = client.generate(
+        prompt,
+        n=sampling.samples,
+        temperature=sampling.temperature,
+        json_schema=schema,
+        seed=sampling.seed,
+    )
+    return [
+        _read_or_repair(client, prompts, spec, prompt, response, sampling.seed)
+        for response in [*greedy, *sampled]
+    ]
+
+
+def _read_or_repair(
+    client: LLMClient,
+    prompts: Prompts,
+    spec: FieldSpec,
+    prompt: str,
+    response: RawResponse,
+    seed: int,
+) -> SampleAnswer | None:
+    try:
+        return read_answer(response, spec)
+    except AnswerError as problem:
+        repair = build_repair_prompt(prompts, prompt, response.text, str(problem))
+        [repaired] = client.generate(
+            repair, n=1, temperature=0.0, json_schema=answer_schema(spec), seed=seed
+        )
+    try:
+        return read_answer(repaired, spec)
+    except AnswerError as problem:
+        _log.warning("unusable answer for field %s after repair: %s", spec.name, problem)
+        return None
+
+
 def _json_object(text: str) -> dict[str, object]:
     start, end = text.find("{"), text.rfind("}")
     if start < 0 or end < start:
@@ -226,3 +365,9 @@ def _value_span(text: str) -> tuple[int, int] | None:
     if isinstance(value, str) and value:
         return start + 1, end - 1
     return start, end
+
+
+def _found_in(evidence: str | None, part: Chunk, min_similarity: float) -> bool:
+    if evidence is None:
+        return False
+    return bool(locate(text_document(part.text, "chunk"), evidence, min_similarity=min_similarity))

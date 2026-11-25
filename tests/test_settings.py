@@ -112,3 +112,13 @@ def test_a_priced_budget_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("EXGA_HOSTED__OUTPUT_PRICE_PER_MILLION", "0.6")
 
     assert load_settings().hosted.budget_usd == 5.0
+
+
+@pytest.mark.parametrize("version", ["../secrets", "extract v1", "Extract_V1", ""])
+def test_prompt_versions_must_be_plain_folder_names(
+    monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    monkeypatch.setenv("EXGA_EXTRACTION__PROMPT_VERSION", version)
+
+    with pytest.raises(ConfigError, match=r"extraction\.prompt_version"):
+        load_settings()

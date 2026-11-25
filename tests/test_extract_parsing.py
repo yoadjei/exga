@@ -16,6 +16,7 @@ from exga.extract import (
     build_prompt,
     build_repair_prompt,
     load_prompts,
+    merge_chunks,
     paper_text,
     read_answer,
     value_logprob,
@@ -232,6 +233,49 @@ def test_logprob_is_missing_when_it_cannot_be_attributed(
     text: str, tokens: list[tuple[str, float]] | None
 ) -> None:
     assert value_logprob(reply(text, tokens)) is None
+
+
+def answer(value: str | None, evidence: str | None = None) -> SampleAnswer:
+    return SampleAnswer(value=value, evidence=evidence)
+
+
+FIRST = Chunk(index=0, text="Background only.", paragraph_pages=(1,), sections=())
+SECOND = Chunk(
+    index=1, text="A total of 120 participants were randomised.", paragraph_pages=(2,), sections=()
+)
+
+
+def test_a_single_chunk_is_returned_unchanged() -> None:
+    answers = [answer("90", "made up"), None, answer(None)]
+
+    assert merge_chunks([answers], [FIRST], 0.9) == answers
+
+
+def test_each_slot_prefers_an_answer_supported_by_its_chunk() -> None:
+    unsupported = answer("90", "ninety participants")
+    supported = answer("120", "120 participants were randomised")
+
+    [merged] = merge_chunks([[unsupported], [supported]], [FIRST, SECOND], 0.9)
+
+    assert merged == supported
+
+
+def test_without_support_the_first_answer_with_a_value_wins() -> None:
+    [merged] = merge_chunks(
+        [[answer(None)], [answer("90", "not in the text")]], [FIRST, SECOND], 0.9
+    )
+
+    assert merged == answer("90", "not in the text")
+
+
+def test_a_slot_is_not_reported_only_when_no_chunk_has_a_value() -> None:
+    [merged] = merge_chunks([[None], [answer(None)]], [FIRST, SECOND], 0.9)
+
+    assert merged == answer(None)
+
+
+def test_a_slot_that_failed_in_every_chunk_stays_failed() -> None:
+    assert merge_chunks([[None], [None]], [FIRST, SECOND], 0.9) == [None]
 
 
 if __name__ == "__main__":
