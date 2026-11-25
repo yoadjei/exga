@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from exga.errors import ConfigError
-from exga.fields import fields_to_yaml, load_fields, save_fields
+from exga.fields import fields_to_yaml, load_fields, parse_field, save_fields
 from exga.schemas import FieldSpec
 
 VALID = """\
@@ -91,3 +91,14 @@ def test_the_yaml_text_is_what_save_fields_writes(tmp_path: Path) -> None:
 
     assert text == (tmp_path / "fields.yaml").read_text(encoding="utf-8")
     assert text.startswith("fields:\n- name: sample_size\n")
+
+
+def test_a_form_entry_becomes_a_field_spec() -> None:
+    spec = parse_field({"name": "country", "description": "country", "group": "short_text"})
+
+    assert spec == FieldSpec(name="country", description="country", group="short_text")
+
+
+def test_an_invalid_form_entry_names_each_problem() -> None:
+    with pytest.raises(ConfigError, match="name: String should match pattern"):
+        parse_field({"name": "Country", "description": "country", "group": "short_text"})

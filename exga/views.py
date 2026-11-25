@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from exga.calibrate import required_n
 from exga.messages import guarantee, percent, status
 from exga.schemas import CalibrationRecord, Decision, Extraction, FieldSpec, ThresholdResult
+from exga.store import PaperRow
 
 TEXT_COLOUR = "#1a1a1a"
 STATUS_STYLES: dict[Decision, str] = {
@@ -28,6 +29,51 @@ def status_css(decision: Decision | None) -> str:
     if decision is None:
         return ""
     return f"background-color: {STATUS_STYLES[decision]}; color: {TEXT_COLOUR}"
+
+
+def next_step(*, fields: int, papers: int, extracted: int, records: int) -> tuple[str, str]:
+    """what to do next in the workflow, and the screen to do it on (spec 0A.6 empty states)."""
+    if fields == 0:
+        return "Add the fields to extract from each paper.", "fields"
+    if papers == 0:
+        return "Upload the papers to extract from.", "run"
+    if extracted < fields * papers:
+        return "Run the extraction for the items not extracted yet.", "run"
+    if records == 0:
+        return "Calibrate: import checked values or start a random audit.", "calibrate"
+    return "Review the results, and audit a new random batch in each session.", "review"
+
+
+def field_rows(specs: Sequence[FieldSpec]) -> list[dict[str, object]]:
+    """one row per field for the Fields table; settings a field does not use are blank."""
+    return [
+        {
+            "Field": spec.name,
+            "Group": spec.group,
+            "Description": spec.description,
+            "Allowed values": ", ".join(spec.allowed_values or ()),
+            "Unit": spec.unit or "",
+            "Tolerance": _tolerance(spec),
+        }
+        for spec in specs
+    ]
+
+
+def paper_rows(
+    papers: Sequence[PaperRow], extractions: Sequence[Extraction], n_fields: int
+) -> list[dict[str, object]]:
+    """one row per paper for the Run page, with how many of its fields are extracted."""
+    extracted: dict[str, int] = {}
+    for item in extractions:
+        extracted[item.paper_id] = extracted.get(item.paper_id, 0) + 1
+    return [
+        {
+            "Paper": paper.filename,
+            "Type": "PDF" if paper.source == "pdf" else "Text",
+            "Fields extracted": f"{extracted.get(paper.paper_id, 0)} of {n_fields}",
+        }
+        for paper in papers
+    ]
 
 
 def review_rows(
@@ -118,6 +164,15 @@ def _luminance(colour: str) -> float:
         c / 12.92 if c <= _SRGB_LINEAR_LIMIT else ((c + 0.055) / 1.055) ** 2.4 for c in channels
     ]
     return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def _tolerance(spec: FieldSpec) -> str:
+    parts = []
+    if spec.numeric_tolerance:
+        parts.append(f"± {spec.numeric_tolerance:g}")
+    if spec.rel_tolerance:
+        parts.append(f"± {percent(spec.rel_tolerance)}")
+    return " or ".join(parts)
 
 
 def _certification(result: ThresholdResult) -> str:

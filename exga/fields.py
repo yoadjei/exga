@@ -18,6 +18,21 @@ from exga.errors import ConfigError
 from exga.schemas import FieldSpec
 
 
+def parse_field(entry: object) -> FieldSpec:
+    """one field spec from a mapping, such as a YAML entry or the app's form.
+
+    raises ConfigError naming each problem, e.g. "name: String should match pattern ...".
+    """
+    try:
+        return FieldSpec.model_validate(entry)
+    except ValidationError as exc:
+        problems = "; ".join(
+            f"{'.'.join(str(part) for part in error['loc']) or 'entry'}: {error['msg']}"
+            for error in exc.errors()
+        )
+        raise ConfigError(problems) from exc
+
+
 def load_fields(path: Path) -> tuple[FieldSpec, ...]:
     """return the field specs in the file at path, in file order.
 
@@ -35,13 +50,9 @@ def load_fields(path: Path) -> tuple[FieldSpec, ...]:
     specs = []
     for index, entry in enumerate(content["fields"]):
         try:
-            specs.append(FieldSpec.model_validate(entry))
-        except ValidationError as exc:
-            problems = "; ".join(
-                f"{'.'.join(str(part) for part in error['loc']) or 'entry'}: {error['msg']}"
-                for error in exc.errors()
-            )
-            raise ConfigError(f"field list {path}, fields[{index}]: {problems}") from exc
+            specs.append(parse_field(entry))
+        except ConfigError as exc:
+            raise ConfigError(f"field list {path}, fields[{index}]: {exc}") from exc
     names = [spec.name for spec in specs]
     repeated = sorted({name for name in names if names.count(name) > 1})
     if repeated:

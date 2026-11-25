@@ -5,11 +5,15 @@ from datetime import UTC, datetime
 import pytest
 
 from exga.schemas import CalibrationRecord, Extraction, FieldSpec, Signals, ThresholdResult
+from exga.store import PaperRow
 from exga.views import (
     STATUS_STYLES,
     TEXT_COLOUR,
     contrast_ratio,
+    field_rows,
     field_status_rows,
+    next_step,
+    paper_rows,
     required_n_rows,
     review_rows,
 )
@@ -170,3 +174,64 @@ def test_status_colours_meet_wcag_aa_contrast(decision: str) -> None:
 def test_contrast_ratio_matches_the_wcag_extremes() -> None:
     assert contrast_ratio("#000000", "#ffffff") == pytest.approx(21.0)
     assert contrast_ratio("#777777", "#777777") == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    ("counts", "screen"),
+    [
+        ((0, 0, 0, 0), "fields"),
+        ((2, 0, 0, 0), "run"),
+        ((2, 3, 4, 0), "run"),
+        ((2, 3, 6, 0), "calibrate"),
+        ((2, 3, 6, 40), "review"),
+    ],
+)
+def test_the_next_step_follows_the_workflow(counts: tuple[int, int, int, int], screen: str) -> None:
+    fields, papers, extracted, records = counts
+
+    message, target = next_step(fields=fields, papers=papers, extracted=extracted, records=records)
+
+    assert target == screen
+    assert message.endswith(".")
+
+
+def test_field_rows_show_only_what_each_field_uses() -> None:
+    weight = FieldSpec(
+        name="weight", description="body weight", group="numeric", unit="kg", rel_tolerance=0.05
+    )
+
+    rows = field_rows([weight, DESIGN])
+
+    assert rows == [
+        {
+            "Field": "weight",
+            "Group": "numeric",
+            "Description": "body weight",
+            "Allowed values": "",
+            "Unit": "kg",
+            "Tolerance": "± 5%",
+        },
+        {
+            "Field": "design",
+            "Group": "categorical",
+            "Description": "design",
+            "Allowed values": "rct, cohort",
+            "Unit": "",
+            "Tolerance": "",
+        },
+    ]
+
+
+def test_paper_rows_count_the_fields_extracted_per_paper() -> None:
+    papers = [
+        PaperRow(PAPER, "trial.pdf", "pdf", None),
+        PaperRow("b" * 64, "notes.md", "text", None),
+    ]
+    items = [extraction("sample_size", "120"), extraction("country", "Ghana")]
+
+    rows = paper_rows(papers, items, n_fields=3)
+
+    assert rows == [
+        {"Paper": "trial.pdf", "Type": "PDF", "Fields extracted": "2 of 3"},
+        {"Paper": "notes.md", "Type": "Text", "Fields extracted": "0 of 3"},
+    ]
