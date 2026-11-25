@@ -43,7 +43,11 @@ bench:
 app:
 	$(UV) run exga app
 
-# the targets below arrive with the phase that builds what they run (spec section 12)
-
+# the spec 11.1 experiments (ADR 0011): extract, then tables, figures and a manifest under
+# results/. extraction sends paid requests unless they are cached; set the model ids in the
+# configs, the key and a budget first (see experiments/main.yaml)
 experiments:
-	@echo "make experiments: not available yet; arrives in phase P8 (experiments)" >&2; exit 1
+	$(UV) run python experiments/run.py extract experiments/main.yaml
+	$(UV) run python experiments/run.py evaluate experiments/main.yaml
+	$(UV) run python experiments/run.py extract experiments/ablations.yaml
+	$(UV) run python experiments/run.py evaluate experiments/ablations.yaml

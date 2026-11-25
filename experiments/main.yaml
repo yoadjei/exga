@@ -1,0 +1,29 @@
+# The main experiment: validity, efficiency, field groups, models and updating
+# (spec 11.1 questions 1, 2, 3, 5 and 6; ADR 0011), with the deployed default score.
+#
+# Before `python experiments/run.py extract experiments/main.yaml`:
+#   - set each model's `model` below (it must return token logprobs);
+#   - put the hosted provider's key in EXGA_HOSTED__API_KEY (never in this file);
+#   - set token prices and a budget, e.g. EXGA_HOSTED__INPUT_PRICE_PER_MILLION,
+#     EXGA_HOSTED__OUTPUT_PRICE_PER_MILLION and EXGA_HOSTED__BUDGET_USD.
+# Then `python experiments/run.py evaluate experiments/main.yaml` (or `make experiments`).
+name: main
+split: TEST
+models:
+  - name: hosted
+    hosted:
+      base_url: https://api.openai.com/v1
+      # model: <provider model id>
+  - name: open-weight
+    hosted:
+      base_url: http://localhost:8000/v1 # a vLLM or llama.cpp server
+      # model: <name the server was started with>
+alphas: [0.05, 0.1, 0.2]
+delta: 0.1
+repetitions: 50
+bootstrap: 1000
+cutoff: 0.8
+audit_batch: 10
+variants:
+  combined: {}
+primary_variant: combined

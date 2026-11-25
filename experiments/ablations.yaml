@@ -1,0 +1,22 @@
+# The signal ablation (spec 11.1 question 4; ADR 0011 decision 6): the same answers scored
+# four ways. Extraction reuses the response cache of main.yaml, so it sends no new requests
+# once main has been extracted with the same models.
+name: ablations
+split: TEST
+models:
+  - name: hosted
+    hosted:
+      base_url: https://api.openai.com/v1
+      # model: <same provider model id as in main.yaml>
+alphas: [0.05, 0.1, 0.2]
+delta: 0.1
+repetitions: 50
+bootstrap: 1000
+cutoff: 0.8
+audit_batch: 10
+variants:
+  agreement: {logprob_weight: 0.0, source_weight: 0.0}
+  agreement+logprob: {source_weight: 0.0}
+  agreement+source: {logprob_weight: 0.0}
+  combined: {}
+primary_variant: combined
