@@ -5,17 +5,20 @@ exga. the order of conditions and the set each one uses are counterbalanced. the
 reported descriptively; nothing here tests a hypothesis.
 """
 
+import math
 import random
 import statistics
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Literal
 
+from exga.errors import ConfigError
 from exga.export import read_cell
 from exga.labels import NOT_REPORTED
 from exga.matching import is_correct
 from exga.schemas import FieldSpec
 from exga.settings import MatchingSettings
+from exga.tables import Row
 
 Condition = Literal["manual", "tool"]
 PaperSet = Literal["A", "B"]
@@ -33,6 +36,26 @@ SUS_ITEMS = 10
 SUS_SCALE = range(1, 6)
 SUS_MULTIPLIER = 2.5
 """a raw SUS total of 0-40 becomes 0-100 (Brooke, 1996)."""
+TRUST_ITEMS = 4
+CONDITIONS: tuple[Condition, ...] = ("manual", "tool")
+ROLES = ("student", "researcher", "other")
+EXPERIENCE = ("none", "some", "much")
+"""prior experience of extracting data from papers, as the questionnaire asks it."""
+SUS_COLUMNS = tuple(f"sus_{number}" for number in range(1, SUS_ITEMS + 1))
+TRUST_COLUMNS = tuple(f"trust_{number}" for number in range(1, TRUST_ITEMS + 1))
+QUESTIONNAIRE_COLUMNS = ("participant", "role", "experience", *SUS_COLUMNS, *TRUST_COLUMNS)
+MEASURES = (
+    "manual_minutes",
+    "tool_minutes",
+    "minutes_difference",
+    "manual_accuracy",
+    "tool_accuracy",
+    "accuracy_difference",
+    "tool_checked_share",
+    "sus",
+)
+"""the participants.csv columns that summary.csv describes."""
+_SPREAD = ("mean", "sd", "median", "q1", "q3", "minimum", "maximum")
 
 
 @dataclass(frozen=True)
@@ -194,3 +217,210 @@ def describe(values: Sequence[float]) -> Summary | None:
 
 def _key(row: Mapping[str, str | None]) -> tuple[str, str]:
     return read_cell(row["paper"] or "").strip(), (row["field"] or "").strip()
+
+
+@dataclass(frozen=True)
+class Responses:
+    """one participant's questionnaire, answered after the tool condition."""
+
+    role: str
+    experience: str
+    sus: tuple[int, ...]
+    trust: tuple[int, ...]
+
+
+def assignment_rows(assignments: Sequence[Assignment]) -> list[Row]:
+    """assignment.csv: who does which condition on which set, in which order."""
+    return [
+        {
+            "participant": row.participant,
+            "first_condition": row.first,
+            "first_set": row.first_set,
+            "second_condition": row.second,
+            "second_set": row.second_set,
+        }
+        for row in assignments
+    ]
+
+
+def session_rows(assignments: Sequence[Assignment]) -> list[Row]:
+    """sessions.csv in session order, with minutes left blank for the researcher."""
+    return [
+        {
+            "participant": row.participant,
+            "condition": condition,
+            "paper_set": row.paper_set(condition),
+            "minutes": None,
+        }
+        for row in assignments
+        for condition in (row.first, row.second)
+    ]
+
+
+def questionnaire_rows(assignments: Sequence[Assignment]) -> list[Row]:
+    """questionnaire.csv with every answer left blank."""
+    return [
+        {"participant": row.participant, **dict.fromkeys(QUESTIONNAIRE_COLUMNS[1:])}
+        for row in assignments
+    ]
+
+
+def read_assignments(rows: Iterable[Mapping[str, str | None]]) -> list[Assignment]:
+    """assignment.csv as written by `assignment_rows`; raises ConfigError for a bad value."""
+    by_text: dict[tuple[str, str], tuple[Condition, PaperSet]] = {order: order for order in ORDERS}
+    assignments = []
+    for row in rows:
+        participant = _cell(row, "participant")
+        text = (_cell(row, "first_condition"), _cell(row, "first_set"))
+        if text not in by_text:
+            raise ConfigError(
+                f"assignment of {participant}: {text[0]!r} on set {text[1]!r} is not a "
+                "condition (manual, tool) on a paper set (A, B)"
+            )
+        first, paper_set = by_text[text]
+        assignments.append(Assignment(participant, first, paper_set))
+    return assignments
+
+
+def read_minutes(rows: Iterable[Mapping[str, str | None]]) -> dict[tuple[str, Condition], float]:
+    """sessions.csv as {(participant, condition): minutes}; a blank time is left out.
+
+    raises ConfigError for an unknown condition or a time that is not a positive number.
+    """
+    by_text: dict[str, Condition] = {condition: condition for condition in CONDITIONS}
+    minutes: dict[tuple[str, Condition], float] = {}
+    for row in rows:
+        participant, text = _cell(row, "participant"), _cell(row, "minutes")
+        condition = by_text.get(_cell(row, "condition"))
+        if condition is None:
+            raise ConfigError(
+                f"sessions of {participant}: unknown condition {_cell(row, 'condition')!r}"
+            )
+        if not text:
+            continue
+        try:
+            value = float(text)
+        except ValueError:
+            value = math.nan
+        if not value > 0:
+            raise ConfigError(
+                f"sessions of {participant}: minutes {text!r} is not a positive number"
+            )
+        minutes[participant, condition] = value
+    return minutes
+
+
+def read_questionnaire(rows: Iterable[Mapping[str, str | None]]) -> dict[str, Responses]:
+    """questionnaire.csv as {participant: responses}; a row with a blank answer is left out.
+
+    raises ConfigError, naming the participant and column, for a value outside its scale.
+    """
+    points = {str(point) for point in SUS_SCALE}
+    responses = {}
+    for row in rows:
+        participant = _cell(row, "participant")
+        cells = {column: _cell(row, column) for column in QUESTIONNAIRE_COLUMNS[1:]}
+        if not all(cells.values()):
+            continue
+        for column, allowed in (("role", ROLES), ("experience", EXPERIENCE)):
+            if cells[column] not in allowed:
+                raise ConfigError(
+                    f"questionnaire of {participant}: {column} {cells[column]!r} is not one of "
+                    f"{', '.join(allowed)}"
+                )
+        for column in (*SUS_COLUMNS, *TRUST_COLUMNS):
+            if cells[column] not in points:
+                raise ConfigError(
+                    f"questionnaire of {participant}: {column} {cells[column]!r} is not a "
+                    "whole number from 1 to 5"
+                )
+        responses[participant] = Responses(
+            role=cells["role"],
+            experience=cells["experience"],
+            sus=tuple(int(cells[column]) for column in SUS_COLUMNS),
+            trust=tuple(int(cells[column]) for column in TRUST_COLUMNS),
+        )
+    return responses
+
+
+@dataclass(frozen=True)
+class Session:
+    """one condition of one participant: how long it took and how accurate the answers were."""
+
+    minutes: float
+    accuracy: Accuracy
+
+
+@dataclass(frozen=True)
+class ParticipantResult:
+    """everything measured for one participant who completed the study."""
+
+    assignment: Assignment
+    manual: Session
+    tool: Session
+    checked: int
+    """items of the tool condition the participant checked."""
+    responses: Responses
+
+    def row(self) -> Row:
+        """one row of participants.csv; differences are tool minus manual."""
+        return {
+            "participant": self.assignment.participant,
+            "first_condition": self.assignment.first,
+            "manual_set": self.assignment.paper_set("manual"),
+            "tool_set": self.assignment.paper_set("tool"),
+            "manual_minutes": self.manual.minutes,
+            "tool_minutes": self.tool.minutes,
+            "minutes_difference": self.tool.minutes - self.manual.minutes,
+            "manual_accuracy": self.manual.accuracy.rate,
+            "tool_accuracy": self.tool.accuracy.rate,
+            "accuracy_difference": self.tool.accuracy.rate - self.manual.accuracy.rate,
+            "manual_unanswered": self.manual.accuracy.unanswered,
+            "tool_unanswered": self.tool.accuracy.unanswered,
+            "tool_items": self.tool.accuracy.items,
+            "tool_checked": self.checked,
+            "tool_checked_share": self.checked / self.tool.accuracy.items,
+            "sus": sus_score(list(self.responses.sus)),
+            "role": self.responses.role,
+            "experience": self.responses.experience,
+        }
+
+
+def summary_rows(results: Sequence[ParticipantResult]) -> list[Row]:
+    """summary.csv: each measure described for everyone, then by which condition came first."""
+    groups = {
+        "all": results,
+        "manual first": [result for result in results if result.assignment.first == "manual"],
+        "tool first": [result for result in results if result.assignment.first == "tool"],
+    }
+    rows: list[Row] = []
+    for group, members in groups.items():
+        participant_rows = [member.row() for member in members]
+        for measure in MEASURES:
+            summary = describe([float(str(row[measure])) for row in participant_rows])
+            cells = asdict(summary) if summary else {"n": 0, **dict.fromkeys(_SPREAD)}
+            rows.append({"group": group, "measure": measure, **cells})
+    return rows
+
+
+def trust_rows(results: Sequence[ParticipantResult]) -> list[Row]:
+    """trust.csv: how often each answer was given to each trust item, with the median.
+
+    the items are not a validated scale, so they are reported one by one, never summed.
+    """
+    rows: list[Row] = []
+    for index, column in enumerate(TRUST_COLUMNS):
+        answers = [result.responses.trust[index] for result in results]
+        rows.append(
+            {
+                "item": column,
+                "n": len(answers),
+                "median": statistics.median(answers) if answers else None,
+                **{f"answer_{point}": answers.count(point) for point in SUS_SCALE},
+            }
+        )
+    return rows
+
+
+def _cell(row: Mapping[str, str | None], column: str) -> str:
+    return (row.get(column) or "").strip()
