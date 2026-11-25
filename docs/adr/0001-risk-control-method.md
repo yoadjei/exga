@@ -1,6 +1,6 @@
 # ADR 0001: certify thresholds with fixed-sequence binomial testing
 
-- **Status:** proposed, awaiting owner review
+- **Status:** accepted 2026-11-25 (the owner delegated these decisions); amended by ADR 0003
 - **Date:** 2026-11-25
 - **Spec:** sections 2, 5.1–5.5
 
@@ -47,7 +47,10 @@ correction is needed.
   the sequence early. Validity is unaffected.
 - The bound holds **per calibration unit**. With F independent fields at δ = 0.1, the chance
   that at least one field's bound fails can reach 1 − 0.9^F (0.57 for F = 8), and F·δ in
-  general. The UI and docs must say "per field" (docs/limitations.md).
+  general. **Decided: keep the bound per field** and say "per field" in every message
+  (docs/limitations.md). A simultaneous bound (δ/F per field) would need 42 instead of 22
+  accepted items per field at α = 0.10 with zero errors, more than the roughly 40-paper
+  calibration split of the owner-annotated set can supply, so no field would ever certify.
 - Validity needs calibration and new papers to be exchangeable (spec 3), and items within a
   unit to be independent, hence at most one item per paper per field.
 - The Clopper–Pearson bound is computed at a λ̂ chosen from the same data. It is shown as a

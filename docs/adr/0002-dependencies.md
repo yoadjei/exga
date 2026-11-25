@@ -1,6 +1,6 @@
 # ADR 0002: dependency set, and no LLM orchestration frameworks
 
-- **Status:** proposed, awaiting owner review
+- **Status:** accepted 2026-11-25 (the owner delegated these decisions)
 - **Date:** 2026-11-25
 - **Spec:** sections 0A.2, 0A.3, 8
 
@@ -55,7 +55,9 @@ pydantic plugin, pytest, pytest-cov, and hypothesis from P1.
   numpy, scipy and pydantic. Any other import there needs a line in this ADR.
 - PyMuPDF is AGPL-3.0. exga's own code stays MIT, but anyone who distributes exga together
   with PyMuPDF, or runs a modified version as a network service, must meet the AGPL terms.
-  That is the owner's call (`docs/PROGRESS.md`, open questions).
+  **Decided: keep PyMuPDF.** It is the only candidate with word boxes and page rendering in
+  one package, the spec names it, and exga is open source anyway. The README states the
+  dependency's licence.
 - pyyaml is an addition to the spec's list.
 - streamlit brings pyarrow and pandas, the largest part of the install, to library users too.
   Revisit if install time hurts on Kaggle or a laptop: move the app into an `[app]` extra.
