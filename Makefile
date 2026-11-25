@@ -2,6 +2,8 @@
 # on windows, install GNU make (winget install ezwinports.make) or run the commands directly.
 
 UV ?= uv
+# pure-core modules held to the 90% coverage floor (spec 0A.4); extended as each one lands
+CORE_MODULES = exga/matching.py,exga/calibrate.py,exga/simulation.py
 
 .PHONY: setup lint format type test verify-guarantee bench app experiments
 
@@ -23,14 +25,20 @@ format:
 type:
 	$(UV) run mypy
 
-# fast test suite with a coverage report
+# fast test suite with a coverage report, then the coverage floor on the pure core
 test:
 	$(UV) run pytest --cov --cov-report=term-missing
+	$(UV) run coverage report --include="$(CORE_MODULES)" --fail-under=90
+
+# full 1,000-repetition guarantee simulation; writes results/guarantee_simulation.csv
+verify-guarantee:
+	$(UV) run python scripts/verify_guarantee.py
+
+# core-path timing against the budget in spec 0A.5
+bench:
+	$(UV) run python scripts/bench.py
 
 # the targets below arrive with the phase that builds what they run (spec section 12)
-verify-guarantee bench:
-	@echo "make $@: not available yet; arrives in phase P1 (calibration core)" >&2; exit 1
-
 app:
 	@echo "make app: not available yet; arrives in phase P7 (web app)" >&2; exit 1
 
