@@ -13,7 +13,7 @@
 4. Never hard-code API keys. Read them from environment variables.
 5. Never overstate results in docs, README or thesis text. Report what was measured, with confidence intervals.
 6. Fix random seeds and cache every LLM response so experiments are reproducible and cheap to rerun.
-7. Keep the library (`extractguard/`) independent of the web app (`app/`). The app only calls the library.
+7. Keep the library (`exga/`) independent of the web app (`app/`). The app only calls the library.
 
 ---
 
@@ -26,7 +26,7 @@ This project will be read by examiners, graduate admissions committees and futur
 - **Typed domain, not dicts.** Data crosses module boundaries only as the Pydantic models in `schemas.py`. No `dict[str, Any]` in public signatures. Frozen models for records that must not change after creation (`CalibrationRecord`, `ThresholdResult`).
 - **No global state.** Configuration is a single `Settings` object (pydantic-settings) passed in explicitly. No module-level clients, no singletons.
 - **Idempotent, resumable pipeline.** Each step is keyed by content: `paper_id = sha256(pdf bytes)`, cache key = hash of (model, prompt version, inputs, sampling params). Rerunning a step never duplicates work or rows. A crashed run resumes where it stopped.
-- **Errors are explicit.** Define a small error hierarchy (`ExtractGuardError` → `PdfParseError`, `LLMResponseError`, `InsufficientCalibrationError`, `ConfigError`). Never `except Exception: pass`. Every caught exception is either handled with a specific recovery or re-raised with context.
+- **Errors are explicit.** Define a small error hierarchy (`ExgaError` → `PdfParseError`, `LLMResponseError`, `InsufficientCalibrationError`, `ConfigError`). Never `except Exception: pass`. Every caught exception is either handled with a specific recovery or re-raised with context.
 - **One place for user-facing claims.** All wording that states or implies a guarantee comes from a single module (`messages.py`) and is generated from the `ThresholdResult`. The UI must never say "guaranteed" when the result is pooled, uncertified, or based on fewer than the configured minimum records.
 
 ### 0A.2 Things that make code look "vibe-coded" and are not allowed
@@ -42,11 +42,11 @@ This project will be read by examiners, graduate admissions committees and futur
 - Large, untested, multi-purpose commits.
 
 ### 0A.3 Dependencies
-Every runtime dependency must earn its place. Record the reason in `docs/adr/0002-dependencies.md`. Target runtime set: `pymupdf`, `pydantic`, `pydantic-settings`, `numpy`, `scipy`, `scikit-learn`, `rapidfuzz`, `pandas`, `openpyxl`, `typer`, `httpx`, `streamlit`. The local model back-end (`transformers`, `torch`) is an optional extra (`pip install extractguard[local]`) so the core installs in seconds on a laptop. Pin with a lock file (`uv` or `pip-tools`).
+Every runtime dependency must earn its place. Record the reason in `docs/adr/0002-dependencies.md`. Target runtime set: `pymupdf`, `pydantic`, `pydantic-settings`, `numpy`, `scipy`, `scikit-learn`, `rapidfuzz`, `pandas`, `openpyxl`, `typer`, `httpx`, `streamlit`. The local model back-end (`transformers`, `torch`) is an optional extra (`pip install exga[local]`) so the core installs in seconds on a laptop. Pin with a lock file (`uv` or `pip-tools`).
 
 ### 0A.4 Code quality gates (enforced in CI)
 - `ruff` (lint and format) with a project config; no blanket ignores.
-- `mypy --strict` on `extractguard/` core modules; the app may be less strict.
+- `mypy --strict` on `exga/` core modules; the app may be less strict.
 - `pytest` with coverage ≥ 90% on the pure core (`matching`, `score`, `calibrate`, `decide`, `evaluate`, `audit`). Coverage is a floor, not a goal; tests must assert behaviour, not just execute lines.
 - **Property-based tests** (`hypothesis`) for the calibration algorithm: the returned threshold is always a point on the fixed grid or `None`; accepted-set error on calibration never exceeds the certified bound; results are invariant to input order; adding a correct high-score record never removes certification.
 - **Golden tests** for prompts and parsing: fixed model outputs → fixed parsed results, so prompt edits are visible in review.
@@ -282,25 +282,25 @@ All rules live in one module with unit tests. Thresholds are config values, not 
 
 ## 7. Module specifications
 
-### 7.1 `extractguard/pdf.py`
+### 7.1 `exga/pdf.py`
 - `load_pdf(path) -> Document` with per-page text and word bounding boxes (PyMuPDF `page.get_text("words")`).
 - `find_span(document, text) -> list[location]`: locate evidence or value text; try exact match, then normalised match, then fuzzy match (`rapidfuzz`, ratio ≥ 90) over sliding windows. Return an empty list if not found.
 - `chunk(document, max_tokens)`: section-aware chunks for long papers.
 
-### 7.2 `extractguard/llm/`
+### 7.2 `exga/llm/`
 - `base.py`: `class LLMClient: def generate(prompt, n, temperature, json_schema) -> list[RawResponse]` returning text and, if available, token logprobs.
 - `hosted.py`: adapter for a hosted API (configurable; prefer one that returns logprobs). Key from env var.
 - `local.py`: adapter for an open-weight instruct model via Hugging Face `transformers` (or vLLM on Kaggle).
 - `cache.py`: disk cache keyed by `(model_id, prompt_hash, n, temperature, seed)`.
 - Retry with exponential backoff; respect rate limits.
 
-### 7.3 `extractguard/extract.py`
+### 7.3 `exga/extract.py`
 - Prompt template (versioned) asks for JSON: `{"value": ..., "evidence": "<exact quote>", "page": int|null}` and to return `null` when not reported.
 - Run `k` samples (default 5) at temperature 0.7 plus one greedy sample at temperature 0.
 - Validate JSON; one repair retry on parse failure; otherwise record a failed sample.
 - If the paper is long, run per chunk and merge, keeping answers whose evidence is found in the chunk.
 
-### 7.4 `extractguard/score.py`
+### 7.4 `exga/score.py`
 Signals, each in [0, 1]:
 - `agreement`: share of samples whose value matches the greedy value under the field's correctness rule.
 - `logprob`: `exp(mean token logprob)` of the greedy value tokens, if available; otherwise missing.
@@ -313,33 +313,33 @@ The candidate value is the greedy answer.
 
 **Data splits must be disjoint:** score-model training, calibration, and test. Never fit anything on the calibration or test split.
 
-### 7.5 `extractguard/calibrate.py`
+### 7.5 `exga/calibrate.py`
 - `fit_threshold(scores, wrong, alpha, delta, m_min) -> ThresholdResult` implementing Section 5.3.
 - `ThresholdResult`: `lambda_hat | None`, `certified: bool`, `n_accepted_cal`, `errors_accepted_cal`, `upper_bound`, `method`, `group`, `pooled: bool`.
 - `conformal_selection(...)` for Section 5.5.
 
-### 7.6 `extractguard/decide.py`
+### 7.6 `exga/decide.py`
 - Apply thresholds per group to new extractions: `ACCEPT` if `score ≥ λ̂`, else `FLAG`; `NOT_CERTIFIABLE` if the group has no certified threshold.
 
-### 7.7 `extractguard/audit.py`
+### 7.7 `exga/audit.py`
 - `draw_audit(extractions, rate, min_n, seed) -> list[item]`: uniform random sample over all items.
 - `record_audit(item, is_wrong)` appends a `CalibrationRecord(source="random_audit")`.
 - `recalibrate(store) -> dict[group, ThresholdResult]` with a versioned log.
 
-### 7.8 `extractguard/evaluate.py`
+### 7.8 `exga/evaluate.py`
 - Metrics on a labelled test set: realised selective error, acceptance rate, coverage of correct values, raw accuracy, per group and per model; 95% CIs by bootstrap over papers.
 - Baselines: accept all; fixed cut-off (e.g. 0.8) without calibration; verify all.
 - Repeated random splits (default 50) to estimate how often the guarantee is violated (should be ≤ δ).
 
-### 7.9 `extractguard/export.py`
+### 7.9 `exga/export.py`
 CSV and XLSX export with columns: paper, field, value, decision, score, evidence, page.
 
-### 7.10 `extractguard/cli.py` (Typer)
+### 7.10 `exga/cli.py` (Typer)
 ```
-extractguard extract --papers ./pdfs --fields fields.yaml --model hosted
-extractguard calibrate --records cal.jsonl --alpha 0.05 --delta 0.1
-extractguard review-export --out results.xlsx
-extractguard evaluate --config experiments/main.yaml
+exga extract --papers ./pdfs --fields fields.yaml --model hosted
+exga calibrate --records cal.jsonl --alpha 0.05 --delta 0.1
+exga review-export --out results.xlsx
+exga evaluate --config experiments/main.yaml
 ```
 
 ### 7.11 `app/` (Streamlit)
@@ -358,7 +358,7 @@ Use `st.session_state` carefully; all logic in the library.
 ## 8. Repository layout
 
 ```
-extractguard/
+exga/
   __init__.py  pdf.py  extract.py  score.py  calibrate.py  decide.py
   audit.py  evaluate.py  export.py  matching.py  schemas.py  store.py  cli.py
   settings.py  errors.py  messages.py  manifest.py

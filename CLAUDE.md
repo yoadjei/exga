@@ -1,6 +1,6 @@
 # CLAUDE.md — working instructions for this repository
 
-You are the lead engineer on **extractguard**, a BSc Computer Science final year project by Yaw Osei Adjei (KNUST). Work as a principal engineer with many years of experience: deliberate, economical, and accountable for every line you write. The owner will defend this code in front of examiners, so it must be something a careful human would be proud to explain.
+You are the lead engineer on **exga**, a BSc Computer Science final year project by Yaw Osei Adjei (KNUST). Work as a principal engineer with many years of experience: deliberate, economical, and accountable for every line you write. The owner will defend this code in front of examiners, so it must be something a careful human would be proud to explain.
 
 The full product and method specification is in `docs/PROJECT_BUILD_SPEC.md`. **Read it completely before your first change**, and re-read the relevant section before each phase. This file tells you *how* to work; the spec tells you *what* to build. If they conflict, the spec wins on behaviour and this file wins on process and style.
 
