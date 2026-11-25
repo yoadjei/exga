@@ -13,20 +13,24 @@ from exga.labels import NOT_REPORTED
 from exga.messages import STATUS_LABELS
 from exga.schemas import Extraction
 
-COLUMNS = ("paper", "field", "value", "decision", "score", "evidence", "page")
+COLUMNS = ("paper", "field", "value", "decision", "score", "evidence", "page", "checked_value")
 _FORMULA_STARTS = ("=", "+", "@", "\t", "\r")
 _NEGATIVE_NUMBER = re.compile(r"-[\d.]")
 
 
 def export_rows(
-    extractions: Sequence[Extraction], filenames: Mapping[str, str]
+    extractions: Sequence[Extraction],
+    filenames: Mapping[str, str],
+    checked: Mapping[tuple[str, str], str | None] | None = None,
 ) -> list[dict[str, str]]:
     """one row per extraction, as strings ready for a CSV writer.
 
-    value is "NR" for "not reported" and empty when the model gave no usable answer. page is
-    the first page where the evidence was found, or empty. paper is the file name when known,
-    else the paper id.
+    value is the model's: "NR" for "not reported", empty when it gave no usable answer. page
+    is the first page where the evidence was found, or empty. paper is the file name when
+    known, else the paper id. checked_value is the value a person gave in an audit or a
+    correction ("NR" for not reported), or empty when nobody checked the item.
     """
+    checked = {} if checked is None else checked
     return [
         {
             "paper": _safe(filenames.get(item.paper_id, item.paper_id)),
@@ -36,6 +40,7 @@ def export_rows(
             "score": f"{item.score:.3f}",
             "evidence": _safe(item.evidence or ""),
             "page": str(item.location[0].page) if item.location else "",
+            "checked_value": _checked_cell(checked, (item.paper_id, item.field)),
         }
         for item in extractions
     ]
@@ -47,6 +52,12 @@ def write_csv(rows: Sequence[Mapping[str, str]], path: Path) -> None:
         writer = csv.DictWriter(handle, fieldnames=COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _checked_cell(checked: Mapping[tuple[str, str], str | None], key: tuple[str, str]) -> str:
+    if key not in checked:
+        return ""
+    return _safe(checked[key] or NOT_REPORTED)
 
 
 def _safe(cell: str) -> str:

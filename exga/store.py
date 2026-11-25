@@ -288,6 +288,21 @@ class ProjectStore:
             ).fetchall()
         return {(paper_id, field): value for paper_id, field, value in rows}
 
+    def checked_values(self) -> dict[tuple[str, str], str | None]:
+        """the value a person last gave for each (paper, field), in an audit or a correction.
+
+        the newest check wins; a correction made at the same moment as an audit check wins.
+        skipped audit items give no value. None means "not reported".
+        """
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT paper_id, field, checked_value, checked_at, 0, rowid FROM audit_items"
+                " WHERE status = 'checked'"
+                " UNION ALL SELECT paper_id, field, value, created_at, 1, id FROM corrections"
+            ).fetchall()
+        rows.sort(key=lambda row: (datetime.fromisoformat(row[3]), row[4], row[5]))
+        return {(paper_id, field): value for paper_id, field, value, *_ in rows}
+
     def log_thresholds(
         self, results: dict[str, ThresholdResult], n_records: int, at: datetime
     ) -> int:

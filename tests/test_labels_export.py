@@ -105,9 +105,28 @@ def test_export_rows_are_written_for_people() -> None:
         "score": "0.900",
         "evidence": "A total of 120",
         "page": "3",
+        "checked_value": "",
     }
     assert (rows[1]["value"], rows[1]["decision"], rows[1]["page"]) == ("NR", "", "")
     assert (rows[2]["value"], rows[2]["score"]) == ("", "0.000")
+
+
+def test_values_checked_by_a_person_are_exported_beside_the_model_value() -> None:
+    items = [extraction(), extraction(field="country", value="Ghana")]
+    checked = {(PAPER_ID, "sample_size"): "121", (PAPER_ID, "country"): None}
+
+    rows = export_rows(items, {}, checked)
+
+    assert [(row["value"], row["checked_value"]) for row in rows] == [
+        ("120", "121"),
+        ("Ghana", "NR"),
+    ]
+
+
+def test_a_checked_value_that_looks_like_a_formula_is_neutralised() -> None:
+    [row] = export_rows([extraction()], {}, {(PAPER_ID, "sample_size"): "=1+1"})
+
+    assert row["checked_value"] == "'=1+1"
 
 
 @pytest.mark.parametrize(

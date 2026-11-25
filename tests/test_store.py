@@ -216,3 +216,25 @@ def test_a_newer_migration_is_applied_once(tmp_path: Path, monkeypatch: pytest.M
 
 def test_the_paper_id_is_the_document_hash() -> None:
     assert PAPER.paper_id == hashlib.sha256(b"A total of 120 participants in Ghana.").hexdigest()
+
+
+def test_the_latest_check_by_a_person_wins(store: ProjectStore) -> None:
+    batch = store.start_audit(
+        [extraction("sample_size", "120", 0.9), extraction("country", "Ghana", 0.8)],
+        seed=1,
+        at=NOW,
+    )
+    store.set_audit_result(
+        batch, PAPER.paper_id, "sample_size", checked_value="121", skipped=False, at=LATER
+    )
+    store.set_audit_result(
+        batch, PAPER.paper_id, "country", checked_value=None, skipped=True, at=NOW
+    )
+    # an edit made before the audit is overruled by it; one made after overrules it
+    store.add_correction(PAPER.paper_id, "sample_size", "119", NOW)
+    store.add_correction(PAPER.paper_id, "country", None, LATER)
+
+    assert store.checked_values() == {
+        (PAPER.paper_id, "sample_size"): "121",
+        (PAPER.paper_id, "country"): None,
+    }
