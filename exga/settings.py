@@ -44,6 +44,18 @@ class CalibrationSettings(BaseModel):
         return step
 
 
+class MatchingSettings(BaseModel):
+    """thresholds of the correctness rules for text fields (spec 6.4)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", use_attribute_docstrings=True)
+
+    short_text_min_f1: float = Field(default=0.8, gt=0.0, le=1.0)
+    """token F1 at or above which a short_text value counts as correct when not identical."""
+
+    long_text_min_f1: float = Field(default=0.6, gt=0.0, le=1.0)
+    """token F1 at or above which a long_text value counts as correct."""
+
+
 class Settings(BaseSettings):
     """all exga settings. build with `load_settings`, then pass explicitly."""
 
@@ -57,6 +69,9 @@ class Settings(BaseSettings):
 
     calibration: CalibrationSettings = Field(default_factory=CalibrationSettings)
     """risk-control parameters."""
+
+    matching: MatchingSettings = Field(default_factory=MatchingSettings)
+    """correctness-rule thresholds."""
 
 
 def load_settings(env_file: Path | None = None) -> Settings:

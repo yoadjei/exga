@@ -20,3 +20,12 @@ handle it. Nothing below is implemented yet unless it says so.
   independent. That holds when each paper contributes at most one item per field. Pooling
   several fields from the same paper breaks it (one badly parsed PDF causes several errors at
   once), so pooled results must be labelled as assuming independence (spec 5.4).
+
+## Correctness rules (labels)
+
+- Numeric matching reads the first number in a value. It does not understand ranges
+  ("18–65"), inequalities ("< 0.001"), European decimal commas ("1,5" reads as 1) or unit
+  conversions (45% and 0.45 do not match). Fields should ask for one number in a stated unit.
+- Text matching is lexical. Paraphrases with little word overlap count as wrong unless listed
+  as synonyms (short_text and categorical) or above the token-F1 threshold. Agreement with the
+  owner's judgements is to be measured on 50 items (spec 13). See ADR 0003.

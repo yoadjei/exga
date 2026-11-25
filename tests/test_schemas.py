@@ -283,3 +283,33 @@ def test_log_probabilities_cannot_be_positive() -> None:
 def test_token_counts_cannot_be_negative() -> None:
     with pytest.raises(ValidationError, match="input_tokens"):
         RawResponse(text="120", token_logprobs=None, input_tokens=-1, output_tokens=1)
+
+
+def test_short_text_field_accepts_synonyms() -> None:
+    spec = FieldSpec(
+        name="country",
+        description="country of data collection",
+        group="short_text",
+        synonyms={"united states": ("usa",)},
+    )
+
+    assert spec.synonyms == {"united states": ("usa",)}
+
+
+@pytest.mark.parametrize("group", ["numeric", "long_text"])
+def test_synonyms_on_numeric_or_long_text_fields_are_rejected(group: str) -> None:
+    with pytest.raises(ValidationError, match="synonyms"):
+        FieldSpec.model_validate(
+            {"name": "x", "description": "d", "group": group, "synonyms": {"a": ["b"]}}
+        )
+
+
+def test_categorical_synonyms_must_name_allowed_values() -> None:
+    with pytest.raises(ValidationError, match="outside allowed_values"):
+        FieldSpec(
+            name="study_design",
+            description="design",
+            group="categorical",
+            allowed_values=("rct", "cohort"),
+            synonyms={"trial": ("randomised trial",)},
+        )

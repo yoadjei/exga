@@ -56,6 +56,8 @@ class FieldSpec(_Record):
     """absolute tolerance for numeric fields, in the field's unit."""
     rel_tolerance: float = Field(default=0.0, ge=0.0)
     """relative tolerance for numeric fields, as a fraction of the gold value."""
+    synonyms: dict[NonEmptyText, tuple[NonEmptyText, ...]] | None = None
+    """canonical value -> variants that count as equal to it; categorical and short_text only."""
 
     @model_validator(mode="after")
     def _check_options_fit_group(self) -> Self:
@@ -67,8 +69,13 @@ class FieldSpec(_Record):
         if self.group == "categorical":
             if self.allowed_values is None or len(set(self.allowed_values)) < _MIN_CATEGORIES:
                 raise ValueError("categorical fields need at least two distinct allowed_values")
+            unknown = set(self.synonyms or {}) - set(self.allowed_values)
+            if unknown:
+                raise ValueError(f"synonyms name values outside allowed_values: {sorted(unknown)}")
         elif self.allowed_values is not None:
             raise ValueError(f"allowed_values apply only to categorical fields, not {self.group}")
+        if self.synonyms is not None and self.group not in ("categorical", "short_text"):
+            raise ValueError(f"synonyms apply only to categorical and short_text, not {self.group}")
         return self
 
 
