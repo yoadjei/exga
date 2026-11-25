@@ -41,6 +41,11 @@ standards in spec 0A.6.
   address through an outside service, and send usage statistics. Verified on 2026-11-25: with
   the defaults the server printed a Network and an External URL; bound to localhost, a
   connection to the LAN address was refused.
+- `exga app` also hides Streamlit's Deploy button (`--client.toolbarMode=minimal`), which
+  invites publishing the app, papers included, to a cloud, and sets a blue accent
+  (`--theme.primaryColor=#2563eb`) so selected "Accepted" chips are not red. A custom accent
+  puts Streamlit in its light theme, which the status colours (dark text on light
+  backgrounds) were designed for. A real-browser pass on 2026-11-25 confirmed all three.
 - Text that comes from papers or the model is shown with `st.text` or in tables, and messages
   that quote names pass through `exga.views.plain`, so a paper or file name cannot inject a
   link or a remote image into the page.

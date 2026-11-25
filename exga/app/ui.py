@@ -200,4 +200,10 @@ def show_evidence(
     except PdfParseError as exc:
         st.warning(f"The page cannot be shown: {exc}")
         return
-    st.image(image, caption=f"Page {page}, evidence highlighted", width="stretch")
+    with st.container(border=True):  # a white page needs an edge on a white background
+        st.image(
+            image,
+            caption=f"Page {page}, evidence highlighted",
+            width="stretch",
+            alt=f"Page {page} of {paper.filename}, with the quoted evidence highlighted in yellow",
+        )
