@@ -1,11 +1,12 @@
-"""run the benchmark experiments (spec 11, ADR 0011).
+"""run the experiments (spec 11, ADR 0011).
 
     python experiments/run.py extract experiments/main.yaml    # asks each model; costs money
     python experiments/run.py evaluate experiments/main.yaml   # tables, figures, manifest
 
 extract saves each model's samples under runs/<name>/<model>/ through a shared response cache,
 so a rerun after an interruption sends only the missing requests. evaluate reads the samples
-and writes results/<name>-<config hash>/ (manifest.json, tables/, figures/), sending nothing.
+and writes results/<name>-<config hash>/ (manifest.json, tables/, figures/, and records/ for
+the Calibrate page), sending nothing.
 exit codes: 0 success, 2 configuration error, 3 budget spent.
 """
 
@@ -18,11 +19,11 @@ import figures
 import typer
 
 from exga import experiment
-from exga.benchmark import ANNOTATIONS_SHA256, SOURCE_COMMIT, SOURCE_REPOSITORY
 from exga.errors import BudgetExceededError, ConfigError
 from exga.llm.hosted import HostedLLMClient
 from exga.manifest import build_manifest
 from exga.messages import percent
+from exga.records import save_records
 from exga.settings import load_settings
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -39,11 +40,11 @@ def extract(
     model: Annotated[str | None, typer.Option(help="Only this model.")] = None,
     env_file: EnvFile = None,
 ) -> None:
-    """Ask each model about every benchmark item and save its answers."""
+    """Ask each model about every item of the dataset and save its answers."""
     try:
         config = experiment.load_config(config_path)
         settings = load_settings(env_file)
-        items = experiment.load_benchmark(config)
+        items = experiment.load_items(config, settings.document)
         models = [spec for spec in config.models if model in (None, spec.name)]
         if not models:
             raise ConfigError(f"no model named {model} in {config_path}")
@@ -76,11 +77,11 @@ def extract(
 
 @app.command()
 def evaluate(config_path: ConfigPath, env_file: EnvFile = None) -> None:
-    """Build the tables and figures from saved answers, with a manifest."""
+    """Build the tables, figures and records files from saved answers, with a manifest."""
     try:
         config = experiment.load_config(config_path)
         settings = load_settings(env_file)
-        items = experiment.load_benchmark(config)
+        items = experiment.load_items(config, settings.document)
         labelled = {
             spec.name: experiment.label(items, experiment.load_samples(config, spec), settings)
             for spec in config.models
@@ -92,30 +93,29 @@ def evaluate(config_path: ConfigPath, env_file: EnvFile = None) -> None:
     folder = config.results_folder()
     experiment.write_tables(tables, folder / "tables")
     figures.draw(tables, config.primary_variant, folder / "figures")
+    at = datetime.now(UTC)
+    (folder / "records").mkdir(exist_ok=True)
+    for name, rows in labelled.items():
+        records = experiment.item_records(rows, settings.score, config.data.record_source, at)
+        save_records(records, folder / "records" / f"{name}.jsonl")
     manifest = build_manifest(
         config=config.model_dump(mode="json"),
         settings=settings,
         inputs={
-            "annotations": config.benchmark / experiment.ANNOTATIONS_FILE,
+            **config.data.inputs(),
             **{f"samples/{spec.name}": config.samples_path(spec) for spec in config.models},
         },
         extra={
             "models": {spec.name: _run_summary(config, spec) for spec in config.models},
-            "benchmark": {
-                "repository": SOURCE_REPOSITORY,
-                "commit": SOURCE_COMMIT,
-                "annotations_sha256": ANNOTATIONS_SHA256,
-                "split": config.split,
-                "items": {name: len(rows) for name, rows in labelled.items()},
-            },
+            "data": config.data.provenance(),
+            "items": {name: len(rows) for name, rows in labelled.items()},
             "seeds": {
-                "items": config.item_seed,
                 "splits": [config.seed + r for r in range(config.repetitions)],
                 "bootstrap": config.seed,
             },
         },
         repo=REPOSITORY,
-        at=datetime.now(UTC),
+        at=at,
     )
     (folder / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     typer.echo(f"results in {folder}")

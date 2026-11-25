@@ -18,6 +18,7 @@ import pytest
 from exga import experiment
 from exga.benchmark import FIELDS
 from exga.llm.mock import MockCall, MockLLMClient
+from exga.records import load_records
 from exga.settings import ExtractionSettings, Settings
 
 REPOSITORY = Path(__file__).parents[1]
@@ -106,7 +107,7 @@ def config_path(tmp_path: Path) -> Path:
     path = tmp_path / "e2e.yaml"
     content = {
         "name": "e2e",
-        "benchmark": str(tmp_path / "benchmark"),
+        "data": {"kind": "benchmark", "folder": str(tmp_path / "benchmark")},
         "models": [{"name": "mock"}],
         "alphas": [0.1, 0.2],
         "repetitions": 2,
@@ -119,10 +120,10 @@ def config_path(tmp_path: Path) -> Path:
     return path
 
 
-def test_evaluate_writes_tables_figures_and_a_manifest(config_path: Path) -> None:
+def test_evaluate_writes_tables_figures_records_and_a_manifest(config_path: Path) -> None:
     config = experiment.load_config(config_path)
-    items = experiment.load_benchmark(config)
     settings = Settings(extraction=ExtractionSettings(samples=3, workers=2))
+    items = experiment.load_items(config, settings.document)
     experiment.extract(config, config.models[0], items, MockLLMClient(mock_model), settings)
 
     result = run_script("evaluate", str(config_path))
@@ -142,9 +143,13 @@ def test_evaluate_writes_tables_figures_and_a_manifest(config_path: Path) -> Non
         "updating_mock.png",
     ]
     assert all(path.read_bytes().startswith(b"\x89PNG") for path in figures)
+    records = load_records(folder / "records" / "mock.jsonl")
+    assert len(records) == 160
+    assert {record.source for record in records} == {"benchmark"}
     manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
     assert set(manifest["inputs"]) == {"annotations", "samples/mock"}
-    assert manifest["benchmark"]["items"] == {"mock": 160}
+    assert manifest["items"] == {"mock": 160}
+    assert (manifest["data"]["kind"], manifest["data"]["split"]) == ("benchmark", "TEST")
     assert manifest["seeds"]["splits"] == [0, 1]
     assert manifest["models"]["mock"]["model_id"] == "mock"
     assert manifest["git"]["commit"] is not None

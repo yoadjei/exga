@@ -6,36 +6,42 @@ from the right items, the same way every time.
 
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from exga.benchmark import BenchmarkItem
 from exga.document import text_document
 from exga.errors import ConfigError
+from exga.evaluate import variant_scores
 from exga.experiment import (
+    BenchmarkData,
     ExperimentConfig,
+    GoldItem,
     ModelConfig,
     Tables,
     evaluate,
     extract,
+    item_records,
     label,
-    load_benchmark,
     load_config,
+    load_items,
     load_samples,
     write_tables,
 )
 from exga.llm.mock import MockCall, MockLLMClient
+from exga.papers import load_folder
 from exga.schemas import FieldSpec
 from exga.settings import ExtractionSettings, HostedSettings, Settings
 
 SETTINGS = Settings(extraction=ExtractionSettings(samples=3, workers=2))
+DOCUMENT = SETTINGS.document
 SIZE = FieldSpec(name="intervention_group_size", description="participants", group="numeric")
 EVENTS = FieldSpec(name="intervention_events", description="events", group="numeric")
 RAW = Path(__file__).parents[1] / "data" / "benchmark" / "raw"
 
 
-def synthetic_items(papers: int) -> list[BenchmarkItem]:
+def synthetic_items(papers: int) -> list[GoldItem]:
     items = []
     for index in range(papers):
         size, events = 100 + index, 10 + index % 7
@@ -44,8 +50,8 @@ def synthetic_items(papers: int) -> list[BenchmarkItem]:
             f"There were {events} events in the intervention group.",
             f"trial{index}.md",
         )
-        items.append(BenchmarkItem(document, SIZE, str(size), index))
-        items.append(BenchmarkItem(document, EVENTS, str(events), index))
+        items.append(GoldItem(document, SIZE, str(size)))
+        items.append(GoldItem(document, EVENTS, str(events)))
     return items
 
 
@@ -82,7 +88,7 @@ def config(tmp_path: Path, **update: object) -> ExperimentConfig:
 
 
 @pytest.fixture
-def extracted(tmp_path: Path) -> tuple[ExperimentConfig, list[BenchmarkItem]]:
+def extracted(tmp_path: Path) -> tuple[ExperimentConfig, list[GoldItem]]:
     experiment = config(tmp_path)
     items = synthetic_items(80)
     extract(experiment, experiment.models[0], items, MockLLMClient(mock_model), SETTINGS)
@@ -102,6 +108,7 @@ def test_a_config_file_is_validated_and_keeps_secrets_out(tmp_path: Path) -> Non
         50,
         "combined",
     )
+    assert loaded.data == BenchmarkData(folder=Path("data/benchmark/raw"))
     assert set(loaded.variants) == {
         "agreement",
         "agreement+logprob",
@@ -148,7 +155,7 @@ def test_a_model_overrides_the_environment_endpoint() -> None:
 
 
 def test_extraction_saves_samples_and_a_summary_and_reruns_from_cache(
-    extracted: tuple[ExperimentConfig, list[BenchmarkItem]],
+    extracted: tuple[ExperimentConfig, list[GoldItem]],
 ) -> None:
     experiment, items = extracted
     summary = json.loads(
@@ -164,7 +171,7 @@ def test_extraction_saves_samples_and_a_summary_and_reruns_from_cache(
 
 
 def test_labels_follow_the_gold_values(
-    extracted: tuple[ExperimentConfig, list[BenchmarkItem]],
+    extracted: tuple[ExperimentConfig, list[GoldItem]],
 ) -> None:
     experiment, items = extracted
 
@@ -180,7 +187,7 @@ def test_labels_follow_the_gold_values(
 
 
 def test_labelling_refuses_samples_from_another_run(
-    extracted: tuple[ExperimentConfig, list[BenchmarkItem]],
+    extracted: tuple[ExperimentConfig, list[GoldItem]],
 ) -> None:
     experiment, items = extracted
     samples = load_samples(experiment, experiment.models[0])
@@ -197,7 +204,7 @@ def test_missing_samples_point_to_the_extract_step(tmp_path: Path) -> None:
 
 
 def test_evaluation_builds_every_table_the_same_way_twice(
-    extracted: tuple[ExperimentConfig, list[BenchmarkItem]],
+    extracted: tuple[ExperimentConfig, list[GoldItem]],
 ) -> None:
     experiment, items = extracted
     labelled = {"mock": label(items, load_samples(experiment, experiment.models[0]), SETTINGS)}
@@ -235,14 +242,14 @@ def test_the_results_folder_changes_with_the_config(tmp_path: Path) -> None:
     not (RAW / "annotated_rct_dataset.csv").is_file(), reason="benchmark not downloaded"
 )
 def test_the_downloaded_benchmark_loads_as_550_test_items(tmp_path: Path) -> None:
-    items = load_benchmark(config(tmp_path, benchmark=RAW))
+    items = load_items(config(tmp_path, data={"kind": "benchmark", "folder": RAW}), DOCUMENT)
 
     assert len(items) == 550
 
 
 def test_a_missing_benchmark_says_how_to_get_it(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match=r"download_benchmark\.py"):
-        load_benchmark(config(tmp_path, benchmark=tmp_path / "none"))
+        load_items(config(tmp_path, data={"kind": "benchmark", "folder": tmp_path}), DOCUMENT)
 
 
 def test_tables_are_written_as_csv_files(tmp_path: Path) -> None:
@@ -269,8 +276,76 @@ def test_tables_are_written_as_csv_files(tmp_path: Path) -> None:
 
 
 def test_paths_hash_the_same_on_every_operating_system(tmp_path: Path) -> None:
-    experiment = config(tmp_path, benchmark=Path("data") / "benchmark" / "raw")
+    folder = Path("data") / "benchmark" / "raw"
+    experiment = config(tmp_path, data={"kind": "benchmark", "folder": folder}, runs=Path("r"))
 
     dumped = experiment.model_dump(mode="json")
 
-    assert dumped["benchmark"] == "data/benchmark/raw"  # not data\benchmark\raw on Windows
+    assert dumped["data"]["folder"] == "data/benchmark/raw"  # not data\benchmark\raw on Windows
+    assert dumped["runs"] == "r"
+
+
+def annotated_set(tmp_path: Path, gold: list[tuple[str, str, str]]) -> dict[str, object]:
+    """two text papers, two fields and a gold file; gold rows name papers by file name."""
+    papers = tmp_path / "papers"
+    papers.mkdir()
+    (papers / "a.md").write_text("Study A. 120 participants in Ghana.", encoding="utf-8")
+    (papers / "b.md").write_text("Study B. 80 participants.", encoding="utf-8")
+    (tmp_path / "fields.yaml").write_text(
+        "fields:\n"
+        "  - {name: sample_size, description: participants, group: numeric}\n"
+        "  - {name: country, description: country of the data, group: short_text}\n",
+        encoding="utf-8",
+    )
+    ids = {document.filename: document.paper_id for document in load_folder(papers, DOCUMENT)[0]}
+    ids["missing.pdf"] = "0" * 64
+    rows = [f"{ids[name]},{field},{value}" for name, field, value in gold]
+    (tmp_path / "gold.csv").write_text(
+        "paper_id,field,value\n" + "\n".join(rows) + "\n", encoding="utf-8"
+    )
+    return {
+        "kind": "annotated",
+        "papers": papers,
+        "fields": tmp_path / "fields.yaml",
+        "gold": tmp_path / "gold.csv",
+    }
+
+
+def test_the_annotated_set_loads_each_labelled_paper_and_field(tmp_path: Path) -> None:
+    data = annotated_set(
+        tmp_path,
+        [("a.md", "sample_size", "120"), ("a.md", "country", "Ghana"), ("b.md", "country", "NR")],
+    )
+
+    items = load_items(config(tmp_path, data=data), DOCUMENT)
+
+    assert sorted((i.document.filename, i.spec.name, i.spec.group, i.gold) for i in items) == [
+        ("a.md", "country", "short_text", "Ghana"),
+        ("a.md", "sample_size", "numeric", "120"),
+        ("b.md", "country", "short_text", None),
+    ]
+
+
+def test_gold_for_a_paper_missing_from_the_folder_is_refused(tmp_path: Path) -> None:
+    data = annotated_set(
+        tmp_path, [("a.md", "sample_size", "120"), ("missing.pdf", "country", "NR")]
+    )
+
+    with pytest.raises(ConfigError, match=r"1 paper\(s\) not found in"):
+        load_items(config(tmp_path, data=data), DOCUMENT)
+
+
+def test_records_carry_the_deployed_score_and_label_of_every_item(
+    extracted: tuple[ExperimentConfig, list[GoldItem]],
+) -> None:
+    experiment, items = extracted
+    labelled = label(items, load_samples(experiment, experiment.models[0]), SETTINGS)
+    at = datetime(2026, 11, 25, tzinfo=UTC)
+
+    records = item_records(labelled, SETTINGS.score, "benchmark", at)
+
+    assert [record.score for record in records] == variant_scores(labelled, SETTINGS.score).tolist()
+    assert [(r.paper_id, r.field, r.group, r.wrong) for r in records] == [
+        (item.paper_id, item.field, item.group, item.wrong) for item in labelled
+    ]
+    assert {(record.source, record.created_at) for record in records} == {("benchmark", at)}

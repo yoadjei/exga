@@ -1,4 +1,4 @@
-"""the benchmark experiments (spec 11, ADR 0011): config, extraction, labelling, evaluation.
+"""the experiments (spec 11, ADR 0011): config, extraction, labelling, evaluation.
 
 `experiments/run.py` is the entry point. extraction costs money and runs only when asked;
 evaluation reads the saved samples, so tables are regenerated from configs without new
@@ -9,8 +9,9 @@ import csv
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from pathlib import Path
-from typing import Self
+from typing import Annotated, ClassVar, Literal, Self
 
 import numpy as np
 import yaml
@@ -25,7 +26,9 @@ from pydantic import (
 )
 
 from exga.benchmark import (
-    BenchmarkItem,
+    ANNOTATIONS_SHA256,
+    SOURCE_COMMIT,
+    SOURCE_REPOSITORY,
     Split,
     benchmark_items,
     load_templates,
@@ -48,15 +51,26 @@ from exga.evaluate import (
     variant_scores,
 )
 from exga.extract import extract_pairs, load_prompts, parse_failure_rate
+from exga.fields import load_fields
+from exga.gold import load_gold
 from exga.labels import is_wrong
 from exga.llm.base import LLMClient
 from exga.llm.cache import CachedLLMClient
 from exga.manifest import content_hash
+from exga.papers import load_folder
 from exga.records import load_jsonl, save_jsonl
-from exga.schemas import FieldGroup, FieldSamples, FieldSpec
+from exga.schemas import (
+    CalibrationRecord,
+    Document,
+    FieldGroup,
+    FieldSamples,
+    FieldSpec,
+    RecordSource,
+)
 from exga.score import score_item
 from exga.settings import (
     CalibrationSettings,
+    DocumentSettings,
     HostedSettings,
     ScoreSettings,
     Settings,
@@ -103,16 +117,83 @@ class ModelConfig(BaseModel):
             raise ConfigError(f"model {self.name}: {exc}") from exc
 
 
+class BenchmarkData(BaseModel):
+    """the Yun et al. benchmark as downloaded by scripts/download_benchmark.py (ADR 0008)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    record_source: ClassVar[RecordSource] = "benchmark"
+
+    kind: Literal["benchmark"] = "benchmark"
+    folder: Path = Path("data/benchmark/raw")
+    split: Split = "TEST"
+    item_seed: int = 0
+    """seed choosing one triplet per (paper, field) (ADR 0008)."""
+
+    @field_serializer("folder")
+    def _posix(self, path: Path) -> str:
+        return path.as_posix()
+
+    def inputs(self) -> dict[str, Path]:
+        """the files whose hashes a run manifest records."""
+        return {"annotations": self.folder / ANNOTATIONS_FILE}
+
+    def provenance(self) -> dict[str, object]:
+        """where the data came from, for a run manifest."""
+        return {
+            "kind": self.kind,
+            "repository": SOURCE_REPOSITORY,
+            "commit": SOURCE_COMMIT,
+            "annotations_sha256": ANNOTATIONS_SHA256,
+            "split": self.split,
+            "item_seed": self.item_seed,
+        }
+
+
+class AnnotatedData(BaseModel):
+    """the owner's annotated set (spec 10.2): a folder of papers, its field list and gold file."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    record_source: ClassVar[RecordSource] = "annotation"
+
+    kind: Literal["annotated"]
+    papers: Path
+    fields: Path
+    gold: Path
+
+    @field_serializer("papers", "fields", "gold")
+    def _posix(self, path: Path) -> str:
+        return path.as_posix()
+
+    def inputs(self) -> dict[str, Path]:
+        """the files whose hashes a run manifest records; papers are named in the samples."""
+        return {"fields": self.fields, "gold": self.gold}
+
+    def provenance(self) -> dict[str, object]:
+        """where the data came from, for a run manifest."""
+        return {"kind": self.kind}
+
+
+Data = Annotated[BenchmarkData | AnnotatedData, Field(discriminator="kind")]
+
+
+@dataclass(frozen=True)
+class GoldItem:
+    """one question to a model: a field of one paper, with its gold value (None: not reported)."""
+
+    document: Document
+    spec: FieldSpec
+    gold: str | None
+
+
 class ExperimentConfig(BaseModel):
     """one experiment, as written in experiments/*.yaml (spec 11.2)."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]*$")
-    benchmark: Path = Path("data/benchmark/raw")
-    split: Split = "TEST"
-    item_seed: int = 0
-    """seed choosing one triplet per (paper, field) (ADR 0008)."""
+    data: Data = Field(default_factory=BenchmarkData)
     models: tuple[ModelConfig, ...] = Field(min_length=1)
     alphas: tuple[float, ...] = (0.05, 0.1, 0.2)
     delta: float = Field(default=0.1, gt=0.0, lt=1.0)
@@ -146,7 +227,7 @@ class ExperimentConfig(BaseModel):
             raise ValueError("model names must be distinct")
         return self
 
-    @field_serializer("benchmark", "runs", "results")
+    @field_serializer("runs", "results")
     def _posix(self, path: Path) -> str:
         # forward slashes on every system, so a config hashes, and names its results folder,
         # the same on Windows and Linux
@@ -177,18 +258,50 @@ def load_config(path: Path) -> ExperimentConfig:
         raise ConfigError(f"experiment config {path}: {problems}") from exc
 
 
-def load_benchmark(config: ExperimentConfig) -> list[BenchmarkItem]:
-    """the benchmark items of the config's split; raises ConfigError when not downloaded."""
-    annotations = config.benchmark / ANNOTATIONS_FILE
+def load_items(config: ExperimentConfig, settings: DocumentSettings) -> list[GoldItem]:
+    """the config's dataset as items with gold values.
+
+    raises ConfigError when the data are missing or malformed, or when the gold file names a
+    paper that is not in the papers folder or could not be read.
+    """
+    if isinstance(config.data, AnnotatedData):
+        return _annotated_items(config.data, settings)
+    return _benchmark_items(config.data)
+
+
+def _annotated_items(data: AnnotatedData, settings: DocumentSettings) -> list[GoldItem]:
+    specs = load_fields(data.fields)
+    gold = load_gold(data.gold, specs)
+    documents, skipped = load_folder(data.papers, settings)
+    absent = {paper for paper, _ in gold} - {document.paper_id for document in documents}
+    if absent:
+        unreadable = (
+            f"; unreadable files: {', '.join(s.filename for s in skipped)}" if skipped else ""
+        )
+        raise ConfigError(
+            f"{data.gold} has values for {len(absent)} paper(s) not found in {data.papers}"
+            f"{unreadable}"
+        )
+    return [
+        GoldItem(document, spec, gold[document.paper_id, spec.name])
+        for document in documents
+        for spec in specs
+        if (document.paper_id, spec.name) in gold
+    ]
+
+
+def _benchmark_items(data: BenchmarkData) -> list[GoldItem]:
+    annotations = data.folder / ANNOTATIONS_FILE
     if not annotations.is_file():
         raise ConfigError(
-            f"benchmark not found in {config.benchmark}; run scripts/download_benchmark.py"
+            f"benchmark not found in {data.folder}; run scripts/download_benchmark.py"
         )
     triplets = read_annotations(annotations)
-    texts = load_texts(config.benchmark / TEXTS_FOLDER, triplets)
-    return benchmark_items(
-        triplets, texts, load_templates(), split=config.split, seed=config.item_seed
+    texts = load_texts(data.folder / TEXTS_FOLDER, triplets)
+    items = benchmark_items(
+        triplets, texts, load_templates(), split=data.split, seed=data.item_seed
     )
+    return [GoldItem(item.document, item.spec, item.gold) for item in items]
 
 
 @dataclass(frozen=True)
@@ -205,7 +318,7 @@ class ExtractionRun:
 def extract(
     config: ExperimentConfig,
     model: ModelConfig,
-    items: Sequence[BenchmarkItem],
+    items: Sequence[GoldItem],
     client: LLMClient,
     settings: Settings,
     progress: Callable[[int, int], None] | None = None,
@@ -243,7 +356,7 @@ def load_samples(config: ExperimentConfig, model: ModelConfig) -> list[FieldSamp
 
 
 def label(
-    items: Sequence[BenchmarkItem], samples: Sequence[FieldSamples], settings: Settings
+    items: Sequence[GoldItem], samples: Sequence[FieldSamples], settings: Settings
 ) -> list[LabelledItem]:
     """score every item's samples and mark it wrong or right against its gold value.
 
@@ -256,7 +369,7 @@ def label(
     unknown = found.keys() - by_key.keys()
     if missing or unknown:
         raise ConfigError(
-            f"samples do not match the benchmark items: {len(missing)} items have no samples "
+            f"samples do not match the items: {len(missing)} items have no samples "
             f"and {len(unknown)} samples have no item; run the extraction again"
         )
     labelled = []
@@ -273,6 +386,30 @@ def label(
             )
         )
     return labelled
+
+
+def item_records(
+    items: Sequence[LabelledItem], weights: ScoreSettings, source: RecordSource, at: datetime
+) -> list[CalibrationRecord]:
+    """every labelled item as a calibration record, scored with weights.
+
+    with the deployed weights (`Settings.score`) these are the records file a project imports
+    on its Calibrate page; they certify its papers only if those resemble these items and
+    were extracted with the same model and prompt.
+    """
+    scores = variant_scores(items, weights).tolist()
+    return [
+        CalibrationRecord(
+            paper_id=item.paper_id,
+            field=item.field,
+            group=item.group,
+            score=score,
+            wrong=item.wrong,
+            source=source,
+            created_at=at,
+        )
+        for item, score in zip(items, scores, strict=True)
+    ]
 
 
 @dataclass
