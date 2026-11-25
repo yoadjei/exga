@@ -5,7 +5,7 @@ UV ?= uv
 # pure-core modules held to the 90% coverage floor (spec 0A.4); extended as each one lands
 CORE_MODULES = exga/matching.py,exga/calibrate.py,exga/simulation.py,exga/document.py,exga/score.py,exga/decide.py,exga/labels.py,exga/messages.py,exga/splits.py,exga/audit.py,exga/views.py,exga/evaluate.py
 
-.PHONY: setup lint format type test verify-guarantee bench app experiments
+.PHONY: setup lint format type test verify-guarantee bench app experiments install-check
 
 # create .venv with the exact versions pinned in uv.lock, including dev tools
 setup:
@@ -38,6 +38,11 @@ verify-guarantee:
 # core-path timing against the budget in spec 0A.5
 bench:
 	$(UV) run python scripts/bench.py
+
+# build the wheel, install it into a fresh environment with an empty home folder, and run
+# the CLI and the app from it (P10)
+install-check:
+	UV="$(UV)" $(UV) run python scripts/check_install.py
 
 # the web app on http://localhost:8501, reachable from this computer only (ADR 0010)
 app:
