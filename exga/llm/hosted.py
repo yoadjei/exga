@@ -5,12 +5,14 @@ one (a vLLM or llama.cpp server); differences between endpoints are settings. th
 thread-safe: worker threads share one instance, its connection pool, rate limiter and meter.
 """
 
+import ipaddress
 import logging
 import random
 import time
 from collections.abc import Callable, Mapping
 from types import TracebackType
 from typing import Self
+from urllib.parse import urlsplit
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
@@ -28,6 +30,21 @@ _HTTP_OK = 200
 # provider error messages are quoted in exceptions up to this length
 _MESSAGE_CHARS = 300
 _JITTER = (0.5, 1.0)
+
+
+def endpoint_is_local(base_url: str) -> bool:
+    """whether base_url is on this computer (a loopback address), so paper text stays here.
+
+    the privacy notice (spec 0A.5) depends on this, so any other host, a private network
+    address included, counts as leaving the machine.
+    """
+    host = urlsplit(base_url).hostname
+    if host is None:
+        return False
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host == "localhost"
 
 
 class HostedLLMClient:

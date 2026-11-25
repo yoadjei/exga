@@ -199,3 +199,11 @@ def test_a_records_file_cannot_smuggle_in_audit_records(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="only from completed audit batches"):
         import_record_file(project, tmp_path / "records.jsonl", SETTINGS, NOW)
     assert project.store.records() == []
+
+
+def test_a_project_is_never_made_inside_a_folder_holding_other_files(tmp_path: Path) -> None:
+    (tmp_path / "thesis.docx").write_bytes(b"draft")
+
+    with pytest.raises(ConfigError, match="is not empty"):
+        create_project(tmp_path, [SAMPLE_SIZE])
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["thesis.docx"]

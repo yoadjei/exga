@@ -71,10 +71,13 @@ class RunSummary:
 def create_project(root: Path, specs: Sequence[FieldSpec]) -> Project:
     """make a project in root (created if missing) with the given fields.
 
-    raises ConfigError when root already holds a project: a project is never overwritten.
+    raises ConfigError when root already holds a project, which is never overwritten, or
+    any other file, so a project never scatters its files among someone else's.
     """
     if (root / DATABASE).exists():
         raise ConfigError(f"{root} already holds a project; open it instead")
+    if root.is_dir() and any(root.iterdir()):
+        raise ConfigError(f"{root} is not empty; choose a new or empty folder for a project")
     (root / PAPERS).mkdir(parents=True, exist_ok=True)
     (root / CACHE).mkdir(exist_ok=True)
     project = Project(root, ProjectStore(root / DATABASE))

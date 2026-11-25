@@ -8,7 +8,7 @@ import pytest
 from pydantic import SecretStr
 
 from exga.errors import BudgetExceededError, ConfigError, LLMResponseError
-from exga.llm.hosted import HostedLLMClient
+from exga.llm.hosted import HostedLLMClient, endpoint_is_local
 from exga.llm.limits import RateLimiter
 from exga.settings import HostedSettings
 
@@ -262,3 +262,18 @@ def test_the_model_id_names_model_and_endpoint() -> None:
 def test_n_below_one_is_rejected() -> None:
     with pytest.raises(ValueError, match="n must be at least 1"):
         make_client(Recorder()).generate("p", n=0, temperature=0.0)
+
+
+@pytest.mark.parametrize(
+    ("base_url", "local"),
+    [
+        ("http://localhost:8000/v1", True),
+        ("http://127.0.0.1:8080/v1", True),
+        ("http://[::1]:8000/v1", True),
+        ("https://api.openai.com/v1", False),
+        ("http://localhost.example.com/v1", False),
+        ("http://192.168.1.20:8000/v1", False),
+    ],
+)
+def test_only_loopback_endpoints_count_as_local(base_url: str, local: bool) -> None:
+    assert endpoint_is_local(base_url) is local
