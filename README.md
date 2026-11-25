@@ -6,7 +6,8 @@ value only when it clears a threshold certified on human-checked data, so that t
 among accepted values is at most a chosen α with probability at least 1 − δ. Values below the
 threshold are flagged for a person to check.
 
-**Status:** early development, phase P0 (project setup). Nothing is usable yet. Current state:
+**Status:** early development. The calibration core and PDF reading are built; extraction
+is in progress. Nothing is usable end to end yet. Current state:
 [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Development
@@ -26,4 +27,8 @@ Design decisions: [docs/adr/](docs/adr/).
 
 ## Licence
 
-MIT; see [LICENSE](LICENSE).
+exga's own code is MIT; see [LICENSE](LICENSE).
+
+exga depends on [PyMuPDF](https://pymupdf.readthedocs.io/), which is licensed under the
+AGPL-3.0 (or a commercial licence from Artifex). Anyone who distributes exga together with
+PyMuPDF, or runs a modified version as a network service, must meet the AGPL's terms.
