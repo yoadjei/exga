@@ -1,7 +1,8 @@
 """the review table as CSV (spec 7.9).
 
 cells come from model output, which comes from arbitrary PDFs, so any cell a spreadsheet
-could run as a formula is prefixed with an apostrophe (CSV injection).
+could run as a formula is prefixed with an apostrophe (CSV injection). a cell that already
+starts with an apostrophe gets one too, so `read_cell` can undo the guard exactly.
 """
 
 import csv
@@ -15,6 +16,7 @@ from exga.messages import STATUS_LABELS
 from exga.schemas import Extraction
 
 COLUMNS = ("paper", "field", "value", "decision", "score", "evidence", "page", "checked_value")
+_GUARD = "'"
 _FORMULA_STARTS = ("=", "+", "@", "\t", "\r")
 _NEGATIVE_NUMBER = re.compile(r"-[\d.]")
 
@@ -68,9 +70,18 @@ def _checked_cell(checked: Mapping[tuple[str, str], str | None], key: tuple[str,
     return _safe(checked[key] or NOT_REPORTED)
 
 
+def read_cell(cell: str) -> str:
+    """the value of an exported cell, without the apostrophe that guards it."""
+    unguarded = cell.removeprefix(_GUARD)
+    return unguarded if cell.startswith(_GUARD) and _needs_guard(unguarded) else cell
+
+
 def _safe(cell: str) -> str:
+    return _GUARD + cell if _needs_guard(cell) else cell
+
+
+def _needs_guard(cell: str) -> bool:
     # a leading minus is a formula too, unless the cell is a negative number such as -3.5
-    starts_formula = cell.startswith(_FORMULA_STARTS) or (
+    return cell.startswith((*_FORMULA_STARTS, _GUARD)) or (
         cell.startswith("-") and _NEGATIVE_NUMBER.match(cell) is None
     )
-    return f"'{cell}" if starts_formula else cell

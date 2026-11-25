@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from exga.errors import ConfigError
-from exga.export import COLUMNS, csv_bytes, export_rows, write_csv
+from exga.export import COLUMNS, csv_bytes, export_rows, read_cell, write_csv
 from exga.labels import calibration_records, gold_value, is_wrong
 from exga.schemas import Extraction, FieldSpec, Signals, SpanLocation
 from exga.settings import MatchingSettings
@@ -139,6 +139,7 @@ def test_a_checked_value_that_looks_like_a_formula_is_neutralised() -> None:
         ("-3.5", "-3.5"),
         ("-.5", "-.5"),
         ("Ghana", "Ghana"),
+        ("'=quoted", "''=quoted"),
     ],
 )
 def test_cells_that_spreadsheets_would_run_are_neutralised(value: str, expected: str) -> None:
@@ -146,6 +147,15 @@ def test_cells_that_spreadsheets_would_run_are_neutralised(value: str, expected:
 
     assert row["value"] == expected
     assert row["paper"] == PAPER_ID
+
+
+@pytest.mark.parametrize(
+    "value", ["=1+1", "+44", "@x", "-cmd", "-3.5", "'quoted", "'=quoted", "''", "Ghana", ""]
+)
+def test_reading_a_cell_undoes_the_formula_guard(value: str) -> None:
+    [row] = export_rows([extraction(field="country", value=value or None)], {})
+
+    assert read_cell(row["value"]) == (value or "NR")
 
 
 def test_the_csv_has_a_header_and_reads_back(tmp_path: Path) -> None:
