@@ -88,7 +88,7 @@ def extracted(project: Project) -> Project:
     return project
 
 
-@pytest.mark.parametrize("screen", ["fields"])
+@pytest.mark.parametrize("screen", ["fields", "run", "calibrate", "review"])
 def test_without_a_project_every_page_says_where_to_open_one(screen: str) -> None:
     test = page(app(), screen)
 
@@ -136,6 +136,80 @@ def test_a_field_is_added_and_a_bad_one_explained(project: Project) -> None:
     test.text_area[0].set_value("anything")
     test = button(test, "Add field")()
     assert "should match pattern" in test.error[0].value
+
+
+def test_a_hosted_endpoint_needs_consent_before_a_run(project: Project) -> None:
+    hosted = SETTINGS.model_copy(
+        update={"hosted": HostedSettings(base_url="https://api.example.com/v1", model="m")}
+    )
+    test = page(app(project, hosted), "run")
+    run = next(widget for widget in test.button if widget.label == "Run extraction")
+
+    assert "api\\.example\\.com" in test.warning[0].value
+    assert run.disabled
+    test.checkbox[0].check()
+    test = test.run()
+    assert not next(w for w in test.button if w.label == "Run extraction").disabled
+
+
+def test_papers_are_uploaded_and_extracted(project: Project) -> None:
+    test = page(app(project), "run")
+    # submitted at once: a rerun before submitting discards a form's values, upload included
+    test.file_uploader[0].upload("notes.md", b"Sixty participants were randomised.")
+    test = button(test, "Add papers")()
+    assert "Added 1 paper." in texts(test)
+
+    test = button(test, "Run extraction")()
+
+    assert not test.exception
+    assert "Extracted 2 items." in texts(test)
+    assert len(project.store.extractions()) == 2
+    assert "Every field of every paper is extracted." in texts(test.run())
+
+
+def test_calibrate_shows_the_required_sizes_and_records_a_new_level(extracted: Project) -> None:
+    test = page(app(extracted), "calibrate")
+    required = test.dataframe[1].value
+
+    assert list(required["0 errors"]) == [45, 22, 11]
+    test.selectbox[0].set_value(0.1)
+    test = test.run()
+    assert "Choose the error level before you look at results" in test.warning[0].value
+    test = button(test, "Recalibrate at ≤ 10%")()
+
+    [version] = extracted.store.threshold_log()
+    assert version.results["sample_size"].alpha == 0.1
+    assert "Recalibrated at ≤ 10%" in texts(test)
+
+
+def test_review_lists_values_with_status_in_words(extracted: Project) -> None:
+    test = page(app(extracted), "review")
+    table = test.dataframe[0].value
+
+    assert list(table["Status"]) == ["— Not certifiable"]
+    assert list(table["Value"]) == ["120"]
+    assert "Select a row" in texts(test)
+
+
+def select_review_row(test: AppTest, row: int) -> AppTest:
+    # AppTest cannot click a dataframe row; the selection is set as Streamlit stores it
+    test.session_state["review_table"] = {"selection": {"rows": [row], "columns": [], "cells": []}}
+    return test.run()
+
+
+def test_a_selected_value_shows_its_page_and_takes_a_correction(extracted: Project) -> None:
+    test = select_review_row(page(app(extracted), "review"), 0)
+
+    assert "Paper: trial.pdf" in [text.value for text in test.text]
+    assert len(test.get("image")) == 1  # the page, with the evidence highlighted
+    test.text_input[0].set_value("121")
+    test = button(test, "Save correction")()
+
+    assert extracted.store.corrections() == {
+        (extracted.store.extractions()[0].paper_id, "sample_size"): "121"
+    }
+    assert extracted.store.records() == []  # a correction never becomes a calibration record
+    assert list(test.dataframe[0].value["Checked value"]) == ["121"]
 
 
 def test_the_env_file_comes_from_the_arguments_after_streamlit_run() -> None:
