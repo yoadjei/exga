@@ -11,6 +11,8 @@ from exga.project import (
     draw_next_audit,
     finish_audit,
     import_records,
+    project_settings,
+    recalibrate_project,
     save_scored,
 )
 from exga.schemas import CalibrationRecord, Extraction, FieldSpec, Signals
@@ -137,3 +139,16 @@ def test_draws_are_seeded_by_batch_number(tmp_path: Path, store: ProjectStore) -
     assert first is not None
     assert second is not None
     assert store.audit_items(first) == other.audit_items(second)
+
+
+def test_the_chosen_error_level_carries_into_later_recalibrations(store: ProjectStore) -> None:
+    assert project_settings(store, SETTINGS) == SETTINGS
+    chosen = SETTINGS.model_copy(update={"calibration": CalibrationSettings(alpha=0.2, delta=0.05)})
+    recalibrate_project(store, chosen, NOW)
+
+    settings = project_settings(store, SETTINGS)
+    version = import_records(store, benchmark_records(5), settings, NOW)
+
+    assert (settings.calibration.alpha, settings.calibration.delta) == (0.2, 0.05)
+    assert settings.audit == SETTINGS.audit
+    assert {(r.alpha, r.delta) for r in version.results.values()} == {(0.2, 0.05)}

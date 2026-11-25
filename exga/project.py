@@ -206,6 +206,21 @@ def current_thresholds(store: ProjectStore) -> dict[str, ThresholdResult]:
     return log[-1].results if log else {}
 
 
+def project_settings(store: ProjectStore, settings: Settings) -> Settings:
+    """settings with the alpha and delta of the project's latest calibration.
+
+    a person sets the error level once (Calibrate page); audits and imports must recalibrate
+    at that level, not at the default. before any calibration, settings are returned as given.
+    """
+    results = list(current_thresholds(store).values())
+    if not results:
+        return settings
+    calibration = settings.calibration.model_copy(
+        update={"alpha": results[0].alpha, "delta": results[0].delta}
+    )
+    return settings.model_copy(update={"calibration": calibration})
+
+
 def save_scored(store: ProjectStore, extractions: Sequence[Extraction], at: datetime) -> None:
     """store new extractions with decisions under the current thresholds."""
     store.save_extractions(apply_thresholds(extractions, current_thresholds(store)), at)
