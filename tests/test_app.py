@@ -16,9 +16,11 @@ from streamlit.testing.v1 import AppTest
 import exga.app
 from exga.app import ui
 from exga.app.ui import env_file_argument
+from exga.errors import BudgetExceededError
 from exga.llm.mock import MockCall, MockLLMClient
 from exga.project import Project, add_paper_file, create_project, run_extraction
-from exga.schemas import FieldSpec
+from exga.records import save_records
+from exga.schemas import CalibrationRecord, FieldSpec, RawResponse
 from exga.settings import AuditSettings, ExtractionSettings, HostedSettings, Settings
 
 MAIN = Path(exga.app.__file__).parent / "main.py"
@@ -254,3 +256,68 @@ def test_review_and_audit_say_what_to_do_before_any_extraction(project: Project)
 def test_the_env_file_comes_from_the_arguments_after_streamlit_run() -> None:
     assert env_file_argument(["--env-file", "local.env"]) == Path("local.env")
     assert env_file_argument(["--other", "x"]) is None
+
+
+def test_an_existing_project_is_opened(project: Project) -> None:
+    test = app()
+    test.text_input(key="open_folder").set_value(str(project.root))
+    test = button(test, "Open")()
+
+    assert test.session_state[ui.PROJECT_ROOT] == str(project.root)
+    assert [metric.value for metric in test.metric][:2] == ["1", "1"]
+
+
+def test_an_unused_field_is_removed_only_when_confirmed(project: Project) -> None:
+    project.store.save_fields(
+        [SAMPLE_SIZE, FieldSpec(name="country", description="c", group="short_text")]
+    )
+    test = page(app(project), "fields")
+    test.selectbox[1].set_value("country")
+    test = button(test, "Remove")()
+    assert "Tick the box to confirm." in test.error[0].value
+
+    test.selectbox[1].set_value("country")
+    test.checkbox[0].check()
+    test = button(test, "Remove")()
+    assert [spec.name for spec in project.store.fields()] == ["sample_size"]
+
+
+def test_benchmark_records_are_imported_on_the_calibrate_page(
+    extracted: Project, tmp_path: Path
+) -> None:
+    records = [
+        CalibrationRecord(
+            paper_id=f"{index:064x}",
+            field="sample_size",
+            group="numeric",
+            score=0.95,
+            wrong=False,
+            source="benchmark",
+            created_at=NOW,
+        )
+        for index in range(60)
+    ]
+    save_records(records, tmp_path / "records.jsonl")
+    test = page(app(extracted), "calibrate")
+    test.file_uploader[1].upload("records.jsonl", (tmp_path / "records.jsonl").read_bytes())
+    test = [w for w in test.button if w.label == "Import"][1].click().run()
+
+    assert len(extracted.store.records()) == 60
+    assert "Imported records (threshold version 1)." in texts(test)
+    assert test.dataframe[0].value["Status"].tolist() == ["✓ Certified"]
+
+
+class SpentClient:
+    model_id = "spent"
+
+    def generate(self, *_args: object, **_kwargs: object) -> list[RawResponse]:
+        raise BudgetExceededError("spent 5.00 USD of a 5.00 USD budget")
+
+
+def test_a_spent_budget_stops_the_run_with_a_way_on(project: Project) -> None:
+    test = page(app(project), "run")
+    test.session_state[ui.CLIENT_FACTORY] = lambda _settings: SpentClient()
+    test = button(test.run(), "Run extraction")()
+
+    assert "Answers so far are cached; run again to continue." in test.warning[0].value
+    assert project.store.extractions() == []

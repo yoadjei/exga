@@ -3,7 +3,7 @@
 
 UV ?= uv
 # pure-core modules held to the 90% coverage floor (spec 0A.4); extended as each one lands
-CORE_MODULES = exga/matching.py,exga/calibrate.py,exga/simulation.py,exga/document.py,exga/score.py,exga/decide.py,exga/labels.py,exga/messages.py,exga/splits.py,exga/audit.py
+CORE_MODULES = exga/matching.py,exga/calibrate.py,exga/simulation.py,exga/document.py,exga/score.py,exga/decide.py,exga/labels.py,exga/messages.py,exga/splits.py,exga/audit.py,exga/views.py
 
 .PHONY: setup lint format type test verify-guarantee bench app experiments
 
@@ -39,9 +39,11 @@ verify-guarantee:
 bench:
 	$(UV) run python scripts/bench.py
 
-# the targets below arrive with the phase that builds what they run (spec section 12)
+# the web app on http://localhost:8501, reachable from this computer only (ADR 0010)
 app:
-	@echo "make app: not available yet; arrives in phase P7 (web app)" >&2; exit 1
+	$(UV) run exga app
+
+# the targets below arrive with the phase that builds what they run (spec section 12)
 
 experiments:
 	@echo "make experiments: not available yet; arrives in phase P8 (experiments)" >&2; exit 1
