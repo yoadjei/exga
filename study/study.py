@@ -213,7 +213,7 @@ def _participant(
         assignment=assignment,
         manual=session("manual", study.sheet_answers(_read(files["manual"]))),
         tool=session("tool", study.export_answers(tool_rows)),
-        checked=study.checked_items(tool_rows),
+        corrected=study.corrected_items(tool_rows),
         responses=responses[participant],
     )
 

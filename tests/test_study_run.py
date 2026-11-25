@@ -153,7 +153,7 @@ def fill_in(data: Path, finished: list[str]) -> None:
     """minutes, answers and questionnaires for the finished participants only.
 
     manual answers are all right; the tool's answers are right except one country the
-    participant did not check, and they checked two items.
+    participant did not correct, and they saved two corrections.
     """
     sessions = read(data / "sessions.csv")
     for row in sessions:
@@ -221,7 +221,7 @@ def test_the_analysis_summarises_the_participants_who_finished(study: Path) -> N
         ("1", "0.75")
     }
     assert {
-        (row["minutes_difference"], row["tool_checked"], row["sus"]) for row in participants
+        (row["minutes_difference"], row["tool_corrected"], row["sus"]) for row in participants
     } == {("-11.5", "2", "75")}
     summary = read(out / "summary.csv")
     assert len(summary) == 3 * 8

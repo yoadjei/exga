@@ -52,7 +52,7 @@ MEASURES = (
     "manual_accuracy",
     "tool_accuracy",
     "accuracy_difference",
-    "tool_checked_share",
+    "tool_corrected_share",
     "sus",
 )
 """the participants.csv columns that summary.csv describes."""
@@ -132,9 +132,9 @@ def sheet_answers(rows: Iterable[Mapping[str, str | None]]) -> Answers:
 
 
 def export_answers(rows: Iterable[Mapping[str, str | None]]) -> Answers:
-    """an exga results.csv as answers: the value the participant checked, else the model's.
+    """an exga results.csv as answers: the value the participant saved, else the model's.
 
-    an empty final value (a failed extraction nobody checked) is no answer and is left out.
+    an empty final value (a failed extraction nobody corrected) is no answer and is left out.
     """
     answers: Answers = {}
     for row in rows:
@@ -145,8 +145,12 @@ def export_answers(rows: Iterable[Mapping[str, str | None]]) -> Answers:
     return answers
 
 
-def checked_items(rows: Iterable[Mapping[str, str | None]]) -> int:
-    """how many items of an exga results.csv a person checked."""
+def corrected_items(rows: Iterable[Mapping[str, str | None]]) -> int:
+    """how many items of an exga results.csv a person saved a value for.
+
+    the Review page records corrections only, so a value checked and found right leaves no
+    trace; this counts corrections (including any that repeat the model's value).
+    """
     return sum(bool(row["checked_value"]) for row in rows)
 
 
@@ -359,8 +363,8 @@ class ParticipantResult:
     assignment: Assignment
     manual: Session
     tool: Session
-    checked: int
-    """items of the tool condition the participant checked."""
+    corrected: int
+    """items of the tool condition the participant saved a corrected value for."""
     responses: Responses
 
     def row(self) -> Row:
@@ -379,8 +383,8 @@ class ParticipantResult:
             "manual_unanswered": self.manual.accuracy.unanswered,
             "tool_unanswered": self.tool.accuracy.unanswered,
             "tool_items": self.tool.accuracy.items,
-            "tool_checked": self.checked,
-            "tool_checked_share": self.checked / self.tool.accuracy.items,
+            "tool_corrected": self.corrected,
+            "tool_corrected_share": self.corrected / self.tool.accuracy.items,
             "sus": sus_score(list(self.responses.sus)),
             "role": self.responses.role,
             "experience": self.responses.experience,

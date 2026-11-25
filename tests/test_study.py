@@ -20,7 +20,7 @@ from exga.study import (
     accuracy,
     assign,
     assignment_rows,
-    checked_items,
+    corrected_items,
     describe,
     export_answers,
     questionnaire_rows,
@@ -98,7 +98,7 @@ def test_a_sheet_answer_is_its_value_and_an_empty_cell_is_no_answer() -> None:
     assert sheet_answers(rows) == {("a.pdf", "n"): "120", ("a.pdf", "country"): None}
 
 
-def test_a_tool_answer_is_the_checked_value_else_the_model_value() -> None:
+def test_a_tool_answer_is_the_corrected_value_else_the_model_value() -> None:
     rows = [
         {"paper": "a.pdf", "field": "n", "value": "120", "checked_value": ""},
         {"paper": "a.pdf", "field": "country", "value": "Ghana", "checked_value": "NR"},
@@ -111,7 +111,7 @@ def test_a_tool_answer_is_the_checked_value_else_the_model_value() -> None:
         ("a.pdf", "country"): None,
         ("b.pdf", "country"): "+44 Ghana",
     }
-    assert checked_items(rows) == 2
+    assert corrected_items(rows) == 2
 
 
 def test_accuracy_counts_right_wrong_and_unanswered_gold_items() -> None:
@@ -207,7 +207,7 @@ def result(participant: str, first: Condition, minutes: tuple[float, float]) -> 
         assignment=Assignment(participant, first=first, first_set="A"),
         manual=Session(minutes[0], Accuracy(items=10, correct=8, unanswered=1)),
         tool=Session(minutes[1], Accuracy(items=10, correct=9, unanswered=0)),
-        checked=4,
+        corrected=4,
         responses=Responses("student", "none", sus=(4, 2) * 5, trust=(4, 5, 3, 4)),
     )
 
@@ -220,7 +220,7 @@ def test_results_are_summarised_overall_and_by_order() -> None:
     trust = trust_rows(results)
 
     assert (row["minutes_difference"], row["accuracy_difference"]) == (-10.0, pytest.approx(0.1))
-    assert (row["tool_checked_share"], row["sus"], row["manual_set"]) == (0.4, 75.0, "A")
+    assert (row["tool_corrected_share"], row["sus"], row["manual_set"]) == (0.4, 75.0, "A")
     assert summary["all", "minutes_difference"]["n"] == 2
     assert summary["all", "minutes_difference"]["median"] == -14.0
     assert summary["manual first", "tool_minutes"]["mean"] == 10.0
