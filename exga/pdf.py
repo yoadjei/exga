@@ -24,33 +24,35 @@ _TEXT_FLAGS = pymupdf.TEXT_DEHYPHENATE | pymupdf.TEXT_PRESERVE_WHITESPACE
 _LINES_PER_BLOCK = 10_000
 
 
-def load_pdf(path: Path, settings: DocumentSettings) -> Document:
+def load_pdf(path: Path, settings: DocumentSettings, filename: str | None = None) -> Document:
     """return the page text and word boxes of the PDF at path.
 
-    paper_id is the sha256 of the file bytes. raises PdfParseError when the file cannot be
-    read or opened, is encrypted, or has fewer than settings.min_text_chars characters of
-    text (a scanned PDF, which is out of scope).
+    paper_id is the sha256 of the file bytes; filename, default path.name, is recorded and
+    named in errors. raises PdfParseError when the file cannot be read or opened, is
+    encrypted, or has fewer than settings.min_text_chars characters of text (a scanned PDF,
+    which is out of scope).
     """
+    name = path.name if filename is None else filename
     try:
         data = path.read_bytes()
     except OSError as exc:
-        raise PdfParseError(f"cannot read {path}: {exc}") from exc
+        raise PdfParseError(f"cannot read {name}: {exc}") from exc
     try:
         pdf = pymupdf.open(stream=data, filetype="pdf")
     except (pymupdf.FileDataError, RuntimeError) as exc:
-        raise PdfParseError(f"{path.name} is not a readable PDF: {exc}") from exc
+        raise PdfParseError(f"{name} is not a readable PDF: {exc}") from exc
     with pdf:
         if pdf.needs_pass:
-            raise PdfParseError(f"{path.name} is encrypted")
+            raise PdfParseError(f"{name} is encrypted")
         pages = tuple(_read_page(pdf[index], index + 1) for index in range(pdf.page_count))
     text_chars = sum(len(page.text.strip()) for page in pages)
     if text_chars < settings.min_text_chars:
         raise PdfParseError(
-            f"{path.name} has {text_chars} characters of text; scanned PDFs are not supported"
+            f"{name} has {text_chars} characters of text; scanned PDFs are not supported"
         )
     return Document(
         paper_id=hashlib.sha256(data).hexdigest(),
-        filename=path.name,
+        filename=name,
         source="pdf",
         pages=pages,
     )

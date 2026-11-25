@@ -61,3 +61,31 @@ def test_other_file_types_are_refused(tmp_path: Path) -> None:
 
 def test_skipped_files_compare_by_value() -> None:
     assert Skipped("a.pdf", "encrypted") == Skipped(filename="a.pdf", reason="encrypted")
+
+
+@pytest.mark.parametrize(
+    ("fixture", "stored", "message"),
+    [
+        ("trial_report.pdf", "0a1b.pdf", None),
+        ("not_a_pdf.pdf", "0a1b.pdf", "Upload 1.pdf is not a readable PDF"),
+        ("trial_report.pdf", "0a1b.docx", "Upload 1.pdf is neither a PDF"),
+    ],
+)
+def test_a_stored_file_reports_and_records_its_original_name(
+    tmp_path: Path, fixture: str, stored: str, message: str | None
+) -> None:
+    path = tmp_path / stored
+    shutil.copy(FIXTURES / fixture, path)
+
+    if message is None:
+        assert load_document(path, SETTINGS, filename="Upload 1.pdf").filename == "Upload 1.pdf"
+    else:
+        with pytest.raises(PdfParseError, match=message):
+            load_document(path, SETTINGS, filename="Upload 1.pdf")
+
+
+def test_a_stored_text_file_records_its_original_name(tmp_path: Path) -> None:
+    path = tmp_path / "0a1b.md"
+    path.write_text("Sixty patients were enrolled.", encoding="utf-8")
+
+    assert load_document(path, SETTINGS, filename="notes.md").filename == "notes.md"

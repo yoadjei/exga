@@ -21,18 +21,23 @@ class Skipped:
     reason: str
 
 
-def load_document(path: Path, settings: DocumentSettings) -> Document:
-    """load one paper; raises PdfParseError when it cannot be read or has the wrong type."""
+def load_document(path: Path, settings: DocumentSettings, filename: str | None = None) -> Document:
+    """load one paper; raises PdfParseError when it cannot be read or has the wrong type.
+
+    the file type comes from path's suffix. filename, default path.name, is the name recorded
+    and used in error messages, for files stored under another name (a project's papers/).
+    """
+    name = path.name if filename is None else filename
     suffix = path.suffix.lower()
     if suffix in PDF_SUFFIXES:
-        return load_pdf(path, settings)
+        return load_pdf(path, settings, filename=name)
     if suffix in TEXT_SUFFIXES:
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
-            raise PdfParseError(f"cannot read {path.name} as UTF-8 text: {exc}") from exc
-        return text_document(text, path.name)
-    raise PdfParseError(f"{path.name} is neither a PDF nor a .md or .txt file")
+            raise PdfParseError(f"cannot read {name} as UTF-8 text: {exc}") from exc
+        return text_document(text, name)
+    raise PdfParseError(f"{name} is neither a PDF nor a .md or .txt file")
 
 
 def load_folder(folder: Path, settings: DocumentSettings) -> tuple[list[Document], list[Skipped]]:
